@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Urbalert",
+    "slug": "urbalert",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    }
+  }
+}

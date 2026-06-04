@@ -1,0 +1,14 @@
+{
+  "name": "urbalert",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "web",
+    "shared"
+  ],
+  "scripts": {
+    "backend": "npm run dev --workspace=backend",
+    "web": "npm run dev --workspace=web"
+  }
+}
