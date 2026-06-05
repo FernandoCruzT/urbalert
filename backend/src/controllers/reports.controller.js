@@ -349,7 +349,16 @@ async function getById(req, res) {
         id
       );
 
-      // Autoridad asignada (si existe)
+      // Ciudadano que creó el reporte
+      const ciudadano = await t.oneOrNone(
+        `SELECT u.nombre, u.apellido, u.email, u.telefono, c.estado_cuenta
+         FROM ciudadano c
+         JOIN usuario u ON u.id = c.usuario_id
+         WHERE c.id = $1`,
+        reporte.ciudadano_id
+      );
+
+      // Autoridad asignada (si existe), incluyendo sector
       let autoridad = null;
       if (reporte.autoridad_id) {
         autoridad = await t.oneOrNone(
@@ -357,17 +366,19 @@ async function getById(req, res) {
              a.id,
              a.departamento,
              a.carga_ponderada,
-             u.nombre   AS nombre,
-             u.apellido AS apellido,
-             u.email    AS email
+             u.nombre        AS nombre,
+             u.apellido      AS apellido,
+             u.email         AS email,
+             s.nombre        AS sector_nombre
            FROM autoridad a
            JOIN usuario u ON u.id = a.usuario_id
+           JOIN sector  s ON s.id = a.sector_id
            WHERE a.id = $1`,
           reporte.autoridad_id
         );
       }
 
-      return { ...reporte, fotos, historial, autoridad };
+      return { ...reporte, fotos, historial, ciudadano, autoridad };
     });
 
     return res.json({ reporte: result });

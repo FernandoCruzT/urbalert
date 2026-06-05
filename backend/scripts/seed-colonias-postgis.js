@@ -16,10 +16,10 @@ const GEOJSON_PATH = path.resolve(__dirname, '../../web/public/colonias-zmg.geoj
 // Reglas de asignación de sector por centroide
 // Se evalúan en orden; la primera que coincide gana.
 const SECTOR_RULES = [
-  { nombre: 'Norte',    test: (lat, lng) => lat > 20.72 },
-  { nombre: 'Sur',      test: (lat, lng) => lat < 20.62 },
-  { nombre: 'Oriente',  test: (lat, lng) => lng > -103.27 },
-  { nombre: 'Poniente', test: (lat, lng) => lng < -103.42 },
+  { nombre: 'Norte',    test: (lat, lng) => lat > 20.74 && lng >= -103.45 && lng <= -103.25 },
+  { nombre: 'Sur',      test: (lat, lng) => lat < 20.60 },
+  { nombre: 'Oriente',  test: (lat, lng) => lng > -103.25 },
+  { nombre: 'Poniente', test: (lat, lng) => lng < -103.45 },
   { nombre: 'Centro',   test: ()         => true },
 ];
 
@@ -76,8 +76,9 @@ function toMultiPolygonWKT(geometry) {
       throw new Error(`Sectores faltantes en BD: ${faltantes.join(', ')}. Ejecuta la migración 003 primero.`);
     }
 
-    // Limpiar tabla para re-inserción limpia
-    await db.none('TRUNCATE colonia_poligono CASCADE');
+    // Limpiar tabla para re-inserción limpia.
+    // DELETE (no TRUNCATE CASCADE) para respetar ON DELETE SET NULL en reporte.
+    await db.none('DELETE FROM colonia_poligono');
     console.log('Tabla colonia_poligono vaciada.');
 
     const conteo = { Norte: 0, Sur: 0, Oriente: 0, Poniente: 0, Centro: 0, errores: 0 };

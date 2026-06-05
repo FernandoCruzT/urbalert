@@ -3,24 +3,42 @@ import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { useNavigate } from 'react-router-dom';
 import SuperadminLayout from '../../layouts/SuperadminLayout';
 import api from '../../services/api';
+import Toast from '../../components/Toast';
 
-const LIBRARIES = [];
-const MAP_CENTER  = { lat: 20.6597, lng: -103.3496 };
-const CURRENT_YEAR = new Date().getFullYear();
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const SECTORES = ['Norte','Sur','Oriente','Poniente','Centro'];
+const LIBRARIES    = [];
+const MAP_CENTER   = { lat: 20.6597, lng: -103.3496 };
+const CURRENT_YEAR  = new Date().getFullYear();
+const CURRENT_MONTH = new Date().getMonth() + 1; // 1–12
+const MIN_YEAR      = 2026;
+const YEARS        = Array.from({ length: CURRENT_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i);
+const MESES        = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const SECTORES     = ['Norte','Sur','Oriente','Poniente','Centro'];
+
+/* Dispara fn en updates pero no en el montaje inicial. Cada call site tiene su propio ref. */
+function useDidUpdateEffect(fn, deps) {
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    fn();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
+function maxSemanaForAnio(anio) {
+  if (anio < CURRENT_YEAR) return 52;
+  return Math.max(1, Math.min(52, Math.ceil((new Date() - new Date(anio, 0, 1)) / (7 * 24 * 60 * 60 * 1000))));
+}
 
 /* ── color según intensidad ── */
 function coloniaColor(colonia, metrica) {
   const valor = metrica === 'urgencia' ? colonia?.peso_total : colonia?.total;
   if (!valor || valor === 0) return null;
   if (metrica === 'urgencia') {
-    if (valor <= 2)  return { fill: '#FFF176', opacity: 0.45 }; // amarillo claro
-    if (valor <= 5)  return { fill: '#FFB300', opacity: 0.55 }; // ámbar
-    if (valor <= 10) return { fill: '#F57C00', opacity: 0.65 }; // naranja
-    return                   { fill: '#D32F2F', opacity: 0.75 }; // rojo
+    if (valor <= 2)  return { fill: '#FFF176', opacity: 0.45 };
+    if (valor <= 5)  return { fill: '#FFB300', opacity: 0.55 };
+    if (valor <= 10) return { fill: '#F57C00', opacity: 0.65 };
+    return                   { fill: '#D32F2F', opacity: 0.75 };
   }
-  // cantidad
   if (valor <= 1) return { fill: '#FFF176', opacity: 0.45 };
   if (valor <= 3) return { fill: '#FFB300', opacity: 0.55 };
   if (valor <= 6) return { fill: '#F57C00', opacity: 0.65 };
@@ -56,11 +74,16 @@ const S = {
     padding:'0.4rem 0.5rem', border:'1px solid #D1D5DB', borderRadius:'var(--radius-sm)',
     fontSize:'0.82rem', fontFamily:'inherit', color:'var(--color-text)', width:72, outline:'none',
   },
-  yearFixed: {
-    padding:'0.42rem 0.7rem', border:'1px solid #E5E7EB', borderRadius:'var(--radius-sm)',
-    fontSize:'0.82rem', color:'var(--color-text-muted)', background:'#F9FAFB', userSelect:'none',
+  yearSelect: {
+    padding:'0.4rem 0.5rem', border:'1px solid #D1D5DB', borderRadius:'var(--radius-sm)',
+    fontSize:'0.82rem', fontFamily:'inherit', color:'var(--color-text)', outline:'none', cursor:'pointer',
   },
   filterGroup: { display:'flex', alignItems:'center', gap:'0.35rem' },
+  clearBtn: {
+    background:'none', border:'1px solid #D1D5DB', borderRadius:'50%', cursor:'pointer',
+    fontSize:'0.72rem', color:'var(--color-text-muted)', width:20, height:20, padding:0,
+    display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+  },
   tooltip: {
     position:'absolute', background:'rgba(0,0,0,0.78)', color:'#fff',
     padding:'0.4rem 0.7rem', borderRadius:6, fontSize:'0.78rem',
@@ -84,17 +107,17 @@ const S = {
     display:'flex', alignItems:'center', justifyContent:'space-between',
     padding:'0.75rem 1rem', borderBottom:'1px solid var(--color-border)', flexShrink:0,
   },
-  drawerTitle: { fontSize:'0.9rem', fontWeight:700, color:'var(--color-primary)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
-  drawerClose: { background:'none', border:'none', cursor:'pointer', fontSize:'1.15rem', color:'var(--color-text-muted)', padding:'0.15rem 0.3rem', lineHeight:1, flexShrink:0 },
-  drawerBody: { flex:1, overflowY:'auto', padding:'0.4rem 0.5rem' },
-  drawerEmpty: { padding:'2rem 1rem', textAlign:'center', color:'var(--color-text-muted)', fontSize:'0.84rem' },
+  drawerTitle:   { fontSize:'0.9rem', fontWeight:700, color:'var(--color-primary)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
+  drawerClose:   { background:'none', border:'none', cursor:'pointer', fontSize:'1.15rem', color:'var(--color-text-muted)', padding:'0.15rem 0.3rem', lineHeight:1, flexShrink:0 },
+  drawerBody:    { flex:1, overflowY:'auto', padding:'0.4rem 0.5rem' },
+  drawerEmpty:   { padding:'2rem 1rem', textAlign:'center', color:'var(--color-text-muted)', fontSize:'0.84rem' },
   drawerLoading: { padding:'2rem 1rem', textAlign:'center', color:'var(--color-text-muted)', fontSize:'0.84rem' },
   reportCard: (hovered) => ({
     padding:'0.6rem 0.7rem', borderRadius:'var(--radius-sm)', cursor:'pointer',
     borderBottom:'1px solid var(--color-border)',
     background: hovered ? 'var(--color-bg)' : 'transparent', transition:'background 0.12s',
   }),
-  reportMeta: { display:'flex', alignItems:'center', gap:4, marginBottom:3, flexWrap:'wrap' },
+  reportMeta:   { display:'flex', alignItems:'center', gap:4, marginBottom:3, flexWrap:'wrap' },
   urgBadge: (u) => ({
     display:'inline-block', fontSize:'0.66rem', fontWeight:700, borderRadius:3,
     padding:'1px 5px', textTransform:'uppercase', flexShrink:0,
@@ -102,8 +125,8 @@ const S = {
     color:       u==='alto' ? '#B91C1C' : u==='medio' ? '#92400E' : '#065F46',
   }),
   reportSubcat: { fontSize:'0.75rem', fontWeight:600, color:'var(--color-text)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
-  reportDesc: { fontSize:'0.78rem', color:'var(--color-text-muted)', margin:'2px 0', lineHeight:1.4 },
-  reportDate: { fontSize:'0.7rem', color:'var(--color-text-muted)' },
+  reportDesc:   { fontSize:'0.78rem', color:'var(--color-text-muted)', margin:'2px 0', lineHeight:1.4 },
+  reportDate:   { fontSize:'0.7rem', color:'var(--color-text-muted)' },
   expandedDesc: { fontSize:'0.78rem', color:'var(--color-text)', margin:'4px 0 2px', lineHeight:1.5, whiteSpace:'pre-wrap', wordBreak:'break-word' },
 };
 
@@ -131,7 +154,6 @@ function ColoniaDrawer({ colonia, municipio, reportes, loading, expandedId, onTo
         )}
         {!loading && reportes.map(r => {
           const isExpanded = expandedId === r.id;
-          const esRevision = r.estado === 'en_revision';
           const desc = r.descripcion || '';
           return (
             <div
@@ -197,13 +219,53 @@ function Dropdown({ label, options, value, onChange, disabled }) {
   );
 }
 
+/* ── applyStyles ──
+   sectorLookup: { colonia_nombre_lowercase → sector_nombre } cargado desde /api/heatmap/sectores.
+   Cuando activeSector está activo, la membresía se determina por sectorLookup (no por presencia
+   en el lookup de datos), por lo que colonias del sector sin reportes también reciben borde azul. */
+function applyStyles(dataLayer, lookup, metrica, activeSector, sectorLookup) {
+  dataLayer.setStyle((feature) => {
+    const nombre   = feature.getProperty('nombre');
+    const key      = nombre?.toLowerCase().trim();
+    const data     = lookup[key];
+    const color    = coloniaColor(data, metrica);
+    const inSector = activeSector
+      ? (sectorLookup[key] === activeSector)
+      : true;
+
+    if (!color) {
+      if (activeSector && inSector) {
+        // En el sector pero sin reportes en el periodo: borde azul, sin relleno
+        return { fillColor:'#888', fillOpacity:0.04, strokeColor:'#1F4E79', strokeWeight:2.5, strokeOpacity:0.45 };
+      }
+      return {
+        fillColor:    '#888',
+        fillOpacity:  activeSector ? 0.02 : 0.04,
+        strokeColor:  activeSector ? '#ccc' : '#aaa',
+        strokeWeight: activeSector ? 0.3  : 0.6,
+        strokeOpacity:activeSector ? 0.2  : 0.4,
+      };
+    }
+
+    if (activeSector) {
+      if (inSector) {
+        return { fillColor:color.fill, fillOpacity:color.opacity, strokeColor:'#1F4E79', strokeWeight:2.5, strokeOpacity:1 };
+      }
+      // Fuera del sector: color apagado
+      return { fillColor:color.fill, fillOpacity:0.18, strokeColor:'#bbb', strokeWeight:0.4, strokeOpacity:0.3 };
+    }
+
+    return { fillColor:color.fill, fillOpacity:color.opacity, strokeColor:'#555', strokeWeight:1, strokeOpacity:0.7 };
+  });
+}
+
 /* ── Mapa con choropleth por colonias ── */
-function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
+function ChoroplethMap({ coloniaData, metrica, sector, sectorLookupRef, onColoniaClick }) {
   const mapRef            = useRef(null);
   const dataLayerRef      = useRef(null);
   const geojsonLoaded     = useRef(false);
   const onColoniaClickRef = useRef(onColoniaClick);
-  const [tooltip, setTooltip] = useState(null); // { x, y, nombre, total }
+  const [tooltip, setTooltip] = useState(null);
 
   useEffect(() => { onColoniaClickRef.current = onColoniaClick; }, [onColoniaClick]);
 
@@ -221,17 +283,14 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
   const onMapLoad = useCallback((map) => {
     mapRef.current = map;
 
-    // Crear Data Layer
     const dataLayer = new window.google.maps.Data({ map });
     dataLayerRef.current = dataLayer;
 
-    // Cargar GeoJSON de colonias
     dataLayer.loadGeoJson('/colonias-zmg.geojson', {}, () => {
       geojsonLoaded.current = true;
-      applyStyles(dataLayer, lookup.current, metrica);
+      applyStyles(dataLayer, lookup.current, metrica, null, sectorLookupRef.current);
     });
 
-    // Hover: mostrar tooltip
     dataLayer.addListener('mouseover', (event) => {
       const nombre = event.feature.getProperty('nombre');
       const key    = nombre?.toLowerCase().trim();
@@ -259,7 +318,6 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
       dataLayer.revertStyle(event.feature);
     });
 
-    // Click: abrir drawer de la colonia
     dataLayer.addListener('click', (event) => {
       const nombre    = event.feature.getProperty('nombre');
       const municipio = event.feature.getProperty('municipio');
@@ -267,12 +325,12 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
     });
   }, []);
 
-  /* Re-aplicar estilos cuando cambian los datos o la métrica */
+  /* Re-aplicar estilos cuando cambian datos, métrica o sector seleccionado */
   useEffect(() => {
     if (dataLayerRef.current && geojsonLoaded.current) {
-      applyStyles(dataLayerRef.current, lookup.current, metrica);
+      applyStyles(dataLayerRef.current, lookup.current, metrica, sector, sectorLookupRef.current);
     }
-  }, [coloniaData, metrica]);
+  }, [coloniaData, metrica, sector]);
 
   return (
     <div style={{ width:'100%', height:'100%', position:'relative' }}>
@@ -284,7 +342,6 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
         options={{ mapTypeControl:false, streetViewControl:false, fullscreenControl:false }}
       />
 
-      {/* Tooltip flotante */}
       {tooltip && (
         <div style={{ ...S.tooltip, left: tooltip.x, top: tooltip.y }}>
           <strong>{tooltip.nombre}</strong>
@@ -292,7 +349,6 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
         </div>
       )}
 
-      {/* Leyenda */}
       <div style={S.legend}>
         <strong style={{ fontSize:'0.73rem', marginBottom:2 }}>Reportes por colonia</strong>
         <div style={S.legendRow}><div style={S.legendBox('#FFF176')} /> 1 reporte</div>
@@ -304,31 +360,12 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
   );
 }
 
-function applyStyles(dataLayer, lookup, metrica) {
-  dataLayer.setStyle((feature) => {
-    const nombre = feature.getProperty('nombre');
-    const key    = nombre?.toLowerCase().trim();
-    const data   = lookup[key];
-    const color  = coloniaColor(data, metrica);
-    if (!color) {
-      return { fillColor:'#888', fillOpacity:0.04, strokeColor:'#aaa', strokeWeight:0.6, strokeOpacity:0.4 };
-    }
-    return {
-      fillColor:    color.fill,
-      fillOpacity:  color.opacity,
-      strokeColor:  '#555',
-      strokeWeight: 1,
-      strokeOpacity: 0.7,
-    };
-  });
-}
-
 /* ── Página principal ── */
 export default function SuperadminHeatmap() {
   const navigate = useNavigate();
   const [temporalidad,    setTemporalidad]    = useState('mes');
   const [anio,            setAnio]            = useState(CURRENT_YEAR);
-  const [mes,             setMes]             = useState(new Date().getMonth() + 1);
+  const [mes,             setMes]             = useState(4);
   const [semana,          setSemana]          = useState(1);
   const [categorias,      setCategorias]      = useState([]);
   const [categoriaId,     setCategoriaId]     = useState(null);
@@ -337,10 +374,15 @@ export default function SuperadminHeatmap() {
   const [subcategoriaId,  setSubcategoriaId]  = useState(null);
   const [subcatNombre,    setSubcatNombre]    = useState(null);
   const [sector,          setSector]          = useState(null);
-  const [estado,          setEstado]          = useState('abiertos');
+  const [estado,          setEstado]          = useState('todos');
+  const [vista,           setVista]           = useState('periodo');
   const [metrica,         setMetrica]         = useState('cantidad');
   const [coloniaData,     setColoniaData]     = useState([]);
   const [drawer, setDrawer] = useState({ open:false, colonia:null, reportes:[], loading:false, expandedId:null });
+  const sectorLookupRef = useRef({});
+  const [toastMsg, setToastMsg] = useState('');
+
+  function showToast(msg) { setToastMsg(msg); }
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_KEY || '',
@@ -354,14 +396,41 @@ export default function SuperadminHeatmap() {
   }, []);
 
   useEffect(() => {
+    api.get('/heatmap/sectores')
+      .then(({ data }) => {
+        const normalized = {};
+        Object.entries(data).forEach(([k, v]) => {
+          normalized[k.toLowerCase().trim()] = v;
+        });
+        sectorLookupRef.current = normalized;
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const cat = categorias.find(c => c.id === categoriaId);
     setSubcategorias(cat ? cat.subcategorias : []);
     setSubcategoriaId(null);
     setSubcatNombre(null);
   }, [categoriaId, categorias]);
 
+  /* Clampear semana si el año cambia mientras está activa la vista de semana */
+  useEffect(() => {
+    if (temporalidad === 'semana') {
+      setSemana(s => Math.max(1, Math.min(maxSemanaForAnio(anio), s)));
+    }
+  }, [anio, temporalidad]);
+
+  /* Si al cambiar el año el mes queda en el futuro, resetear al mes actual */
+  useDidUpdateEffect(() => {
+    if (anio === CURRENT_YEAR && mes > CURRENT_MONTH) {
+      setMes(CURRENT_MONTH);
+      showToast('Mes ajustado al mes actual');
+    }
+  }, [anio]);
+
   const fetchData = useCallback(() => {
-    const params = { estado, metrica };
+    const params = { estado, vista, metrica };
     if (temporalidad) {
       params.temporalidad = temporalidad;
       params.anio = anio;
@@ -375,9 +444,20 @@ export default function SuperadminHeatmap() {
     api.get('/heatmap', { params })
       .then(({ data }) => setColoniaData(data.colonias || []))
       .catch(() => setColoniaData([]));
-  }, [temporalidad, anio, mes, semana, categoriaId, subcategoriaId, sector, estado, metrica]);
+  }, [temporalidad, anio, mes, semana, categoriaId, subcategoriaId, sector, estado, vista, metrica]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  /* ── Toasts por interacción de filtros (no en montaje inicial) ── */
+  useDidUpdateEffect(() => showToast(`Filtrando por ${temporalidad}`),                                        [temporalidad]);
+  useDidUpdateEffect(() => showToast(`Año: ${anio}`),                                                         [anio]);
+  useDidUpdateEffect(() => showToast(`Mes: ${MESES[mes - 1]}`),                                               [mes]);
+  useDidUpdateEffect(() => showToast(`Semana ${semana} — ${anio}`),                                           [semana]);
+  useDidUpdateEffect(() => showToast(sector ? `Sector: ${sector}` : 'Mostrando toda la ZMG'),                 [sector]);
+  useDidUpdateEffect(() => showToast(`Reportes: ${estado}`),                                                  [estado]);
+  useDidUpdateEffect(() => showToast(`Vista: ${vista}`),                                                      [vista]);
+  useDidUpdateEffect(() => showToast(categoriaNombre ? `Categoría: ${categoriaNombre}` : 'Sin filtro de categoría'), [categoriaId]);
+  useDidUpdateEffect(() => showToast(`Métrica: ${metrica}`),                                                  [metrica]);
 
   const handleColoniaClick = useCallback((nombre, municipio) => {
     setDrawer({ open:true, colonia:nombre, municipio: municipio || null, reportes:[], loading:true, expandedId:null });
@@ -389,8 +469,14 @@ export default function SuperadminHeatmap() {
       .catch(() => setDrawer(d => ({ ...d, loading:false, reportes:[] })));
   }, [estado, categoriaId]);
 
-  const catOpts    = categorias.map(c => ({ value: c.id, label: c.nombre }));
+  function clearCategoria() {
+    setCategoriaId(null);
+    setCategoriaNombre(null);
+  }
+
+  const catOpts   = categorias.map(c => ({ value: c.id, label: c.nombre }));
   const subcatOpts = subcategorias.map(s => ({ value: s.id, label: s.nombre }));
+  const maxSemana  = maxSemanaForAnio(anio);
 
   return (
     <SuperadminLayout>
@@ -398,7 +484,8 @@ export default function SuperadminHeatmap() {
         <h2 style={S.title}>Mapa de calor</h2>
 
         <div style={S.filters}>
-          {/* Temporalidad */}
+
+          {/* ── Temporalidad ── */}
           <div style={S.filterGroup}>
             <Dropdown
               label="Temporalidad"
@@ -407,66 +494,132 @@ export default function SuperadminHeatmap() {
               onChange={v => setTemporalidad(v)}
             />
             {temporalidad === 'año' && (
-              <input style={S.numInput} type="number" min="2000" max="2099"
-                value={anio} onChange={e => setAnio(Number(e.target.value))} />
+              <select style={S.yearSelect} value={anio} onChange={e => setAnio(Number(e.target.value))}>
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
             )}
             {temporalidad === 'mes' && (
               <>
-                <Dropdown
-                  label="Mes"
-                  options={MESES.map((m, i) => ({ value: i + 1, label: m }))}
-                  value={MESES[mes - 1]}
-                  onChange={v => setMes(Number(v))}
-                />
-                <input style={S.numInput} type="number" min="2000" max="2099"
-                  value={anio} onChange={e => setAnio(Number(e.target.value))} />
+                <select
+                  style={S.yearSelect}
+                  value={mes}
+                  onChange={e => {
+                    const newMes = Number(e.target.value);
+                    if (anio === CURRENT_YEAR && newMes > CURRENT_MONTH) {
+                      showToast('No puedes filtrar por meses futuros');
+                      return;
+                    }
+                    setMes(newMes);
+                  }}
+                >
+                  {MESES.map((m, i) => (
+                    <option
+                      key={i + 1}
+                      value={i + 1}
+                      disabled={anio === CURRENT_YEAR && i + 1 > CURRENT_MONTH}
+                    >
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <select style={S.yearSelect} value={anio} onChange={e => setAnio(Number(e.target.value))}>
+                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
               </>
             )}
             {temporalidad === 'semana' && (
               <>
-                <input style={S.numInput} type="number" min="1" max="52"
-                  value={semana} onChange={e => setSemana(Number(e.target.value))} placeholder="Semana" />
-                <span style={S.yearFixed}>{CURRENT_YEAR}</span>
+                <input
+                  style={S.numInput}
+                  type="number"
+                  min="1"
+                  max={maxSemana}
+                  value={semana}
+                  onChange={e => setSemana(Math.max(1, Math.min(maxSemana, Number(e.target.value))))}
+                  placeholder="Semana"
+                />
+                <select style={S.yearSelect} value={anio} onChange={e => setAnio(Number(e.target.value))}>
+                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
               </>
             )}
           </div>
 
-          {/* Categoría */}
-          <Dropdown
-            label="Categoría"
-            options={catOpts}
-            value={categoriaNombre}
-            onChange={(id, label) => { setCategoriaId(id); setCategoriaNombre(label); }}
-          />
-
-          {/* Subcategoría */}
-          {categoriaId ? (
+          {/* ── Categoría ── */}
+          <div style={S.filterGroup}>
             <Dropdown
-              label="Subcategoría"
-              options={subcatOpts}
-              value={subcatNombre}
-              onChange={(id, label) => { setSubcategoriaId(id); setSubcatNombre(label); }}
+              label="Categoría"
+              options={catOpts}
+              value={categoriaNombre}
+              onChange={(id, label) => { setCategoriaId(id); setCategoriaNombre(label); }}
             />
+            {categoriaId && (
+              <button style={S.clearBtn} onClick={clearCategoria} title="Limpiar categoría">×</button>
+            )}
+          </div>
+
+          {/* ── Subcategoría ── */}
+          {categoriaId ? (
+            <div style={S.filterGroup}>
+              <Dropdown
+                label="Subcategoría"
+                options={subcatOpts}
+                value={subcatNombre}
+                onChange={(id, label) => { setSubcategoriaId(id); setSubcatNombre(label); }}
+              />
+              {subcategoriaId && (
+                <button
+                  style={S.clearBtn}
+                  onClick={() => { setSubcategoriaId(null); setSubcatNombre(null); }}
+                  title="Limpiar subcategoría"
+                >×</button>
+              )}
+            </div>
           ) : (
             <button style={{ ...S.dropBtn, opacity:0.5, cursor:'not-allowed' }} disabled>
               Subcategoría ▾
             </button>
           )}
 
-          {/* Sector */}
-          <Dropdown label="Sector" options={SECTORES} value={sector} onChange={v => setSector(v)} />
+          {/* ── Sector ── */}
+          <div style={S.filterGroup}>
+            <Dropdown label="Sector" options={SECTORES} value={sector} onChange={v => setSector(v)} />
+            {sector && (
+              <button style={S.clearBtn} onClick={() => setSector(null)} title="Limpiar sector">×</button>
+            )}
+          </div>
 
-          {/* Reportes */}
-          <Dropdown label="Reportes" options={['abiertos','cerrados']} value={estado} onChange={v => setEstado(v)} />
+          {/* ── Estado de reportes (todos / abiertos / cerrados) ── */}
+          <Dropdown
+            label="Reportes"
+            options={['todos','abiertos','cerrados']}
+            value={estado}
+            onChange={v => setEstado(v)}
+          />
 
-          {/* Métrica */}
+          {/* ── Vista (periodo / acumulado) ── */}
+          <Dropdown
+            label="Vista"
+            options={['periodo','acumulado']}
+            value={vista}
+            onChange={v => setVista(v)}
+          />
+
+          {/* ── Métrica ── */}
           <Dropdown label="Métrica" options={['cantidad','urgencia']} value={metrica} onChange={v => setMetrica(v)} />
+
         </div>
 
-        {/* Mapa */}
+        {/* ── Mapa ── */}
         <div style={S.mapWrap}>
           {isLoaded ? (
-            <ChoroplethMap coloniaData={coloniaData} metrica={metrica} onColoniaClick={handleColoniaClick} />
+            <ChoroplethMap
+              coloniaData={coloniaData}
+              metrica={metrica}
+              sector={sector}
+              sectorLookupRef={sectorLookupRef}
+              onColoniaClick={handleColoniaClick}
+            />
           ) : (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--color-text-muted)' }}>
               Cargando mapa…
@@ -481,11 +634,12 @@ export default function SuperadminHeatmap() {
               expandedId={drawer.expandedId}
               onToggleExpand={(id) => setDrawer(d => ({ ...d, expandedId: d.expandedId === id ? null : id }))}
               onClose={() => setDrawer(d => ({ ...d, open:false }))}
-              onNavigate={(id) => navigate(`/superadmin/review/escalado/${id}`)}
+              onNavigate={(id) => navigate(`/superadmin/reporte/${id}`)}
             />
           )}
         </div>
       </div>
+      <Toast message={toastMsg} visible={!!toastMsg} />
     </SuperadminLayout>
   );
 }

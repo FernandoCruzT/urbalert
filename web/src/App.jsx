@@ -11,9 +11,10 @@ import AuthorityReport          from './pages/authority/ReportDetail';
 import AuthorityNotifications   from './pages/authority/Notifications';
 import AuthorityHistory         from './pages/authority/History';
 import AuthorityInProgress      from './pages/authority/InProgress';
-import ReviewReports from './pages/superadmin/ReviewReports';
-import ReviewList    from './pages/superadmin/ReviewList';
-import ReviewDetail  from './pages/superadmin/ReviewDetail';
+import ReviewReports    from './pages/superadmin/ReviewReports';
+import ReviewList       from './pages/superadmin/ReviewList';
+import ReviewDetail     from './pages/superadmin/ReviewDetail';
+import ReporteDetalle   from './pages/superadmin/ReporteDetalle';
 import EditProfile      from './pages/superadmin/EditProfile';
 import Notifications    from './pages/superadmin/Notifications';
 import Reassign         from './pages/superadmin/Reassign';
@@ -116,6 +117,14 @@ function App() {
           element={
             <ProtectedRoute roles={['superadmin']}>
               <SuperadminProfile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/superadmin/reporte/:reportId"
+          element={
+            <ProtectedRoute roles={['superadmin']}>
+              <ReporteDetalle />
             </ProtectedRoute>
           }
         />

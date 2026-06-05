@@ -1,7 +1,16 @@
 const { db } = require('../database/connection');
 
+// Offset fijo de México Central (CST = UTC-6).
+// Jalisco no observa DST desde 2023, por lo que el offset es constante.
+const MX_OFFSET_MS = 6 * 60 * 60 * 1000;
+
 /**
- * Convierte parámetros de temporalidad en rango de fechas [inicio, fin].
+ * Convierte parámetros de temporalidad en rango de fechas [inicio, fin] en UTC,
+ * ajustado a la zona horaria de México (CST, UTC-6) para que los límites
+ * correspondan a medianoche y fin de día en hora local.
+ *
+ * inicio = medianoche local  → 00:00 MX = 06:00 UTC
+ * fin    = fin de día local  → 23:59:59 MX = 05:59:59 UTC del día siguiente
  */
 function buildDateRange(temporalidad, anio, mes, semana) {
   if (!temporalidad || !anio) return { inicio: null, fin: null };
@@ -9,27 +18,31 @@ function buildDateRange(temporalidad, anio, mes, semana) {
   switch (temporalidad) {
     case 'año': {
       return {
-        inicio: new Date(`${anio}-01-01T00:00:00Z`),
-        fin:    new Date(`${anio}-12-31T23:59:59Z`),
+        inicio: new Date(Date.UTC(anio,  0,  1, 6,  0,  0,   0)),   // 1-ene 00:00 MX
+        fin:    new Date(Date.UTC(anio, 11, 32, 5, 59, 59, 999)),   // 31-dic 23:59:59 MX
       };
     }
     case 'mes': {
       if (!mes || mes < 1 || mes > 12) return { inicio: null, fin: null };
-      const inicio = new Date(Date.UTC(anio, mes - 1, 1));
-      const fin    = new Date(Date.UTC(anio, mes, 0, 23, 59, 59));
-      return { inicio, fin };
+      // Día 0 del mes siguiente = último día del mes actual
+      return {
+        inicio: new Date(Date.UTC(anio, mes - 1, 1, 6,  0,  0,   0)),  // 1er día 00:00 MX  = día 1 mes 06:00 UTC
+        fin:    new Date(Date.UTC(anio, mes,     1, 5, 59, 59, 999)),  // último día 23:59 MX = día 1 mes+1 05:59 UTC
+      };
     }
     case 'semana': {
       if (!semana || semana < 1 || semana > 53) return { inicio: null, fin: null };
+      // Calcular lunes de la semana ISO: semana 1 contiene el primer jueves del año
       const jan4 = new Date(Date.UTC(anio, 0, 4));
-      const dow  = jan4.getUTCDay() || 7;
+      const dow  = jan4.getUTCDay() || 7;          // lunes=1 … domingo=7
       const week1Monday = new Date(jan4);
       week1Monday.setUTCDate(jan4.getUTCDate() - (dow - 1));
       const inicio = new Date(week1Monday);
       inicio.setUTCDate(week1Monday.getUTCDate() + (semana - 1) * 7);
+      inicio.setUTCHours(6, 0, 0, 0);              // lunes 00:00 MX = 06:00 UTC
       const fin = new Date(inicio);
-      fin.setUTCDate(inicio.getUTCDate() + 6);
-      fin.setUTCHours(23, 59, 59, 999);
+      fin.setUTCDate(inicio.getUTCDate() + 7);     // lunes siguiente 06:00 UTC
+      fin.setUTCHours(5, 59, 59, 999);             // domingo 23:59:59 MX = lunes sig. 05:59:59 UTC
       return { inicio, fin };
     }
     default:
@@ -65,6 +78,7 @@ async function heatmap(req, res) {
     sector_nombre = null,
     estado        = 'abiertos',
     metrica       = 'cantidad',
+    vista         = 'periodo',
     mine          = false,
   } = req.query;
 
@@ -85,6 +99,17 @@ async function heatmap(req, res) {
     : estado === 'todos'
       ? `r.estado IN ('enviado','en_validacion','en_revision','pendiente','asignado','en_proceso','resuelto','cerrado')`
       : `r.estado IN ('asignado', 'en_proceso')`;
+
+  // vista='periodo'   → solo reportes cuyo created_at cae dentro del rango
+  // vista='acumulado' → reportes del periodo MÁS los que siguen abiertos hoy
+  const dateCondition = vista === 'acumulado'
+    ? `AND (
+         (($4::timestamptz IS NULL OR r.created_at >= $4)
+          AND ($5::timestamptz IS NULL OR r.created_at <= $5))
+         OR r.estado IN ('enviado','en_validacion','pendiente','asignado','en_proceso')
+       )`
+    : `AND ($4::timestamptz IS NULL OR r.created_at >= $4)
+       AND ($5::timestamptz IS NULL OR r.created_at <= $5)`;
 
   const mineFilter = isMine
     ? `AND r.autoridad_id = (SELECT id FROM autoridad WHERE usuario_id = $7)`
@@ -117,9 +142,8 @@ async function heatmap(req, res) {
          AND r.longitud   IS NOT NULL
          AND ($1::uuid        IS NULL OR r.categoria_id = $1)
          AND ($2::text        IS NULL OR sub.nombre ILIKE $2)
-         AND ($3::text        IS NULL OR LOWER(sec.nombre) = LOWER($3))
-         AND ($4::timestamptz IS NULL OR r.created_at >= $4)
-         AND ($5::timestamptz IS NULL OR r.created_at <= $5)
+         AND ($3::text IS NULL OR LOWER(sec.nombre) = LOWER($3))
+         ${dateCondition}
          ${mineFilter}
        GROUP BY r.colonia
        ORDER BY total DESC
@@ -156,4 +180,25 @@ async function heatmap(req, res) {
   }
 }
 
-module.exports = { heatmap };
+/**
+ * GET /api/heatmap/sectores
+ * Devuelve un objeto { colonia_nombre: sector_nombre } para todas las colonias con sector asignado.
+ * Usado por el frontend para resaltar colonias de un sector en el mapa choropleth.
+ */
+async function sectores(req, res) {
+  try {
+    const rows = await db.any(
+      `SELECT cp.nombre AS colonia_nombre, s.nombre AS sector_nombre
+       FROM colonia_poligono cp
+       JOIN sector s ON s.id = cp.sector_id`
+    );
+    const map = {};
+    rows.forEach(r => { map[r.colonia_nombre] = r.sector_nombre; });
+    return res.json(map);
+  } catch (err) {
+    console.error('[heatmap/sectores]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+module.exports = { heatmap, sectores };
