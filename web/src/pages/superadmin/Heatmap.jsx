@@ -14,6 +14,11 @@ const YEARS        = Array.from({ length: CURRENT_YEAR - MIN_YEAR + 1 }, (_, i) 
 const MESES        = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const SECTORES     = ['Norte','Sur','Oriente','Poniente','Centro'];
 
+const STORAGE_KEY = 'heatmap_filters';
+function loadFilters() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+}
+
 /* Dispara fn en updates pero no en el montaje inicial. Cada call site tiene su propio ref. */
 function useDidUpdateEffect(fn, deps) {
   const mounted = useRef(false);
@@ -363,20 +368,20 @@ function ChoroplethMap({ coloniaData, metrica, sector, sectorLookupRef, onColoni
 /* ── Página principal ── */
 export default function SuperadminHeatmap() {
   const navigate = useNavigate();
-  const [temporalidad,    setTemporalidad]    = useState('mes');
-  const [anio,            setAnio]            = useState(CURRENT_YEAR);
-  const [mes,             setMes]             = useState(4);
-  const [semana,          setSemana]          = useState(1);
+  const [temporalidad,    setTemporalidad]    = useState(() => loadFilters().temporalidad    ?? 'mes');
+  const [anio,            setAnio]            = useState(() => loadFilters().anio            ?? CURRENT_YEAR);
+  const [mes,             setMes]             = useState(() => loadFilters().mes             ?? CURRENT_MONTH);
+  const [semana,          setSemana]          = useState(() => loadFilters().semana          ?? 1);
   const [categorias,      setCategorias]      = useState([]);
-  const [categoriaId,     setCategoriaId]     = useState(null);
-  const [categoriaNombre, setCategoriaNombre] = useState(null);
+  const [categoriaId,     setCategoriaId]     = useState(() => loadFilters().categoriaId     ?? null);
+  const [categoriaNombre, setCategoriaNombre] = useState(() => loadFilters().categoriaNombre ?? null);
   const [subcategorias,   setSubcategorias]   = useState([]);
-  const [subcategoriaId,  setSubcategoriaId]  = useState(null);
-  const [subcatNombre,    setSubcatNombre]    = useState(null);
-  const [sector,          setSector]          = useState(null);
-  const [estado,          setEstado]          = useState('todos');
-  const [vista,           setVista]           = useState('periodo');
-  const [metrica,         setMetrica]         = useState('cantidad');
+  const [subcategoriaId,  setSubcategoriaId]  = useState(() => loadFilters().subcategoriaId  ?? null);
+  const [subcatNombre,    setSubcatNombre]    = useState(() => loadFilters().subcatNombre    ?? null);
+  const [sector,          setSector]          = useState(() => loadFilters().sector          ?? null);
+  const [estado,          setEstado]          = useState(() => loadFilters().estado          ?? 'todos');
+  const [vista,           setVista]           = useState(() => loadFilters().vista           ?? 'periodo');
+  const [metrica,         setMetrica]         = useState(() => loadFilters().metrica         ?? 'cantidad');
   const [coloniaData,     setColoniaData]     = useState([]);
   const [drawer, setDrawer] = useState({ open:false, colonia:null, reportes:[], loading:false, expandedId:null });
   const sectorLookupRef = useRef({});
@@ -447,6 +452,17 @@ export default function SuperadminHeatmap() {
   }, [temporalidad, anio, mes, semana, categoriaId, subcategoriaId, sector, estado, vista, metrica]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        temporalidad, anio, mes, semana,
+        categoriaId, categoriaNombre,
+        subcategoriaId, subcatNombre,
+        sector, estado, vista, metrica,
+      }));
+    } catch {}
+  }, [temporalidad, anio, mes, semana, categoriaId, categoriaNombre, subcategoriaId, subcatNombre, sector, estado, vista, metrica]);
 
   /* ── Toasts por interacción de filtros (no en montaje inicial) ── */
   useDidUpdateEffect(() => showToast(`Filtrando por ${temporalidad}`),                                        [temporalidad]);

@@ -12,38 +12,36 @@ const MX_OFFSET_MS = 6 * 60 * 60 * 1000;
  * inicio = medianoche local  → 00:00 MX = 06:00 UTC
  * fin    = fin de día local  → 23:59:59 MX = 05:59:59 UTC del día siguiente
  */
-function buildDateRange(temporalidad, anio, mes, semana) {
+function buildDateRange(temporalidad, anio, mes, semana, vista = 'periodo') {
   if (!temporalidad || !anio) return { inicio: null, fin: null };
+
+  const inicioAnio = new Date(Date.UTC(anio, 0, 1, 6, 0, 0, 0));
 
   switch (temporalidad) {
     case 'año': {
+      // Acumulado y periodo son equivalentes para vista anual
       return {
-        inicio: new Date(Date.UTC(anio,  0,  1, 6,  0,  0,   0)),   // 1-ene 00:00 MX
-        fin:    new Date(Date.UTC(anio, 11, 32, 5, 59, 59, 999)),   // 31-dic 23:59:59 MX
+        inicio: inicioAnio,
+        fin:    new Date(Date.UTC(anio, 11, 32, 5, 59, 59, 999)),
       };
     }
     case 'mes': {
       if (!mes || mes < 1 || mes > 12) return { inicio: null, fin: null };
-      // Día 0 del mes siguiente = último día del mes actual
       return {
-        inicio: new Date(Date.UTC(anio, mes - 1, 1, 6,  0,  0,   0)),  // 1er día 00:00 MX  = día 1 mes 06:00 UTC
-        fin:    new Date(Date.UTC(anio, mes,     1, 5, 59, 59, 999)),  // último día 23:59 MX = día 1 mes+1 05:59 UTC
+        inicio: vista === 'acumulado'
+          ? inicioAnio
+          : new Date(Date.UTC(anio, mes - 1, 1, 6, 0, 0, 0)),
+        fin: new Date(Date.UTC(anio, mes, 1, 5, 59, 59, 999)),
       };
     }
     case 'semana': {
       if (!semana || semana < 1 || semana > 53) return { inicio: null, fin: null };
-      // Calcular lunes de la semana ISO: semana 1 contiene el primer jueves del año
-      const jan4 = new Date(Date.UTC(anio, 0, 4));
-      const dow  = jan4.getUTCDay() || 7;          // lunes=1 … domingo=7
-      const week1Monday = new Date(jan4);
-      week1Monday.setUTCDate(jan4.getUTCDate() - (dow - 1));
-      const inicio = new Date(week1Monday);
-      inicio.setUTCDate(week1Monday.getUTCDate() + (semana - 1) * 7);
-      inicio.setUTCHours(6, 0, 0, 0);              // lunes 00:00 MX = 06:00 UTC
-      const fin = new Date(inicio);
-      fin.setUTCDate(inicio.getUTCDate() + 7);     // lunes siguiente 06:00 UTC
-      fin.setUTCHours(5, 59, 59, 999);             // domingo 23:59:59 MX = lunes sig. 05:59:59 UTC
-      return { inicio, fin };
+      return {
+        inicio: vista === 'acumulado'
+          ? inicioAnio
+          : new Date(Date.UTC(anio, 0, 1 + (semana - 1) * 7, 6,  0,  0,   0)),
+        fin: new Date(Date.UTC(anio, 0, 7 + (semana - 1) * 7, 5, 59, 59, 999)),
+      };
     }
     default:
       return { inicio: null, fin: null };
@@ -86,7 +84,7 @@ async function heatmap(req, res) {
   const mesNum    = mes    ? parseInt(mes,     10) : null;
   const semanaNum = semana ? parseInt(semana,  10) : null;
 
-  const { inicio, fin } = buildDateRange(temporalidad, anioNum, mesNum, semanaNum);
+  const { inicio, fin } = buildDateRange(temporalidad, anioNum, mesNum, semanaNum, vista);
 
   const pesoExpr = metrica === 'urgencia'
     ? `CASE r.urgencia WHEN 'alto' THEN 3 WHEN 'medio' THEN 2 ELSE 1 END`
@@ -100,15 +98,10 @@ async function heatmap(req, res) {
       ? `r.estado IN ('enviado','en_validacion','en_revision','pendiente','asignado','en_proceso','resuelto','cerrado')`
       : `r.estado IN ('asignado', 'en_proceso')`;
 
-  // vista='periodo'   → solo reportes cuyo created_at cae dentro del rango
-  // vista='acumulado' → reportes del periodo MÁS los que siguen abiertos hoy
-  const dateCondition = vista === 'acumulado'
-    ? `AND (
-         (($4::timestamptz IS NULL OR r.created_at >= $4)
-          AND ($5::timestamptz IS NULL OR r.created_at <= $5))
-         OR r.estado IN ('enviado','en_validacion','pendiente','asignado','en_proceso')
-       )`
-    : `AND ($4::timestamptz IS NULL OR r.created_at >= $4)
+  // buildDateRange ya calcula el rango correcto según vista:
+  //   periodo   → [inicio del periodo, fin del periodo]
+  //   acumulado → [1 ene del año,      fin del periodo]
+  const dateCondition = `AND ($4::timestamptz IS NULL OR r.created_at >= $4)
        AND ($5::timestamptz IS NULL OR r.created_at <= $5)`;
 
   const mineFilter = isMine

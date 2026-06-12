@@ -119,7 +119,7 @@ export default function SuperadminLayout({ children }) {
               <button style={S.dropItem} onClick={() => { setDropOpen(false); navigate('/superadmin/profile'); }}>
                 <FiUser size={14} /> Mi perfil
               </button>
-              <button style={S.dropItem} onClick={() => { logout(); navigate('/login'); }}>
+              <button style={S.dropItem} onClick={() => { localStorage.removeItem('heatmap_filters'); logout(); navigate('/login'); }}>
                 <FiLogOut size={14} /> Cerrar sesión
               </button>
             </div>
