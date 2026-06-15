@@ -13,14 +13,21 @@ const { db, connectDB } = require('../src/database/connection');
 
 const GEOJSON_PATH = path.resolve(__dirname, '../../web/public/colonias-zmg.geojson');
 
-// Reglas de asignación de sector por centroide
+// Reglas de asignación de sector por centroide (vialidades reales ZMG)
 // Se evalúan en orden; la primera que coincide gana.
 const SECTOR_RULES = [
-  { nombre: 'Norte',    test: (lat, lng) => lat > 20.74 && lng >= -103.45 && lng <= -103.25 },
-  { nombre: 'Sur',      test: (lat, lng) => lat < 20.60 },
-  { nombre: 'Oriente',  test: (lat, lng) => lng > -103.25 },
-  { nombre: 'Poniente', test: (lat, lng) => lng < -103.45 },
-  { nombre: 'Centro',   test: ()         => true },
+  // Centro: entre Calzada Independencia (E) y Av. Federalismo (O), a la altura de Av. Washington
+  { nombre: 'Centro',   test: (lat, lng) => lng >= -103.3565 && lng <= -103.3364 && lat >= 20.660 && lat <= 20.690 },
+  // Norte: por encima de Calzada Circunvalación División del Norte
+  { nombre: 'Norte',    test: (lat, lng) => lat > 20.712 },
+  // Sur: por debajo de Av. Washington, hacia Miravalle y Tlaquepaque
+  { nombre: 'Sur',      test: (lat, lng) => lat < 20.6678 },
+  // Oriente: al oriente de Calzada Independencia
+  { nombre: 'Oriente',  test: (lat, lng) => lng > -103.3364 },
+  // Poniente: al poniente de Av. Federalismo / Américas
+  { nombre: 'Poniente', test: (lat, lng) => lng < -103.3565 },
+  // Fallback: cualquier remanente cae en Centro
+  { nombre: 'Centro',   test: () => true },
 ];
 
 /** Calcula el centroide aproximado de un polígono o multipolígono GeoJSON. */

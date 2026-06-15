@@ -117,6 +117,41 @@ const S = {
   drawerBody:    { flex:1, overflowY:'auto', padding:'0.4rem 0.5rem' },
   drawerEmpty:   { padding:'2rem 1rem', textAlign:'center', color:'var(--color-text-muted)', fontSize:'0.84rem' },
   drawerLoading: { padding:'2rem 1rem', textAlign:'center', color:'var(--color-text-muted)', fontSize:'0.84rem' },
+  modalOverlay: {
+    position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:100,
+    display:'flex', alignItems:'center', justifyContent:'center',
+  },
+  modalBox: {
+    background:'var(--color-surface)', borderRadius:'var(--radius-md)',
+    boxShadow:'var(--shadow-lg)', width:360, maxHeight:'70vh',
+    display:'flex', flexDirection:'column', overflow:'hidden',
+  },
+  modalHeader: {
+    display:'flex', alignItems:'center', justifyContent:'space-between',
+    padding:'0.75rem 1rem', borderBottom:'1px solid var(--color-border)', flexShrink:0,
+    fontSize:'0.9rem', fontWeight:700, color:'var(--color-primary)',
+  },
+  modalBody: { overflowY:'auto', padding:'0.5rem 0' },
+  coloniaItem: {
+    padding:'0.38rem 1rem', fontSize:'0.82rem', color:'var(--color-text)',
+    borderBottom:'1px solid var(--color-border)',
+  },
+  infoBtn: {
+    background:'none', border:'1px solid var(--color-primary)', borderRadius:'50%',
+    cursor:'pointer', fontSize:'0.72rem', color:'var(--color-primary)',
+    width:22, height:22, padding:0, display:'flex', alignItems:'center',
+    justifyContent:'center', flexShrink:0, fontWeight:700,
+  },
+  infoBtnDisabled: {
+    background:'none', border:'1px solid #D1D5DB', borderRadius:'50%',
+    cursor:'not-allowed', fontSize:'0.72rem', color:'var(--color-text-muted)',
+    width:22, height:22, padding:0, display:'flex', alignItems:'center',
+    justifyContent:'center', flexShrink:0, fontWeight:700, opacity:0.45,
+  },
+  toggleLabel: {
+    display:'flex', alignItems:'center', gap:'0.3rem', fontSize:'0.78rem',
+    color:'var(--color-text-muted)', userSelect:'none', cursor:'pointer', whiteSpace:'nowrap',
+  },
   reportCard: (hovered) => ({
     padding:'0.6rem 0.7rem', borderRadius:'var(--radius-sm)', cursor:'pointer',
     borderBottom:'1px solid var(--color-border)',
@@ -265,7 +300,7 @@ function applyStyles(dataLayer, lookup, metrica, activeSector, sectorLookup) {
 }
 
 /* ── Mapa con choropleth por colonias ── */
-function ChoroplethMap({ coloniaData, metrica, sector, sectorLookupRef, onColoniaClick }) {
+function ChoroplethMap({ coloniaData, metrica, sector, showBorders, sectorLookupRef, onColoniaClick }) {
   const mapRef            = useRef(null);
   const dataLayerRef      = useRef(null);
   const geojsonLoaded     = useRef(false);
@@ -330,12 +365,12 @@ function ChoroplethMap({ coloniaData, metrica, sector, sectorLookupRef, onColoni
     });
   }, []);
 
-  /* Re-aplicar estilos cuando cambian datos, métrica o sector seleccionado */
+  /* Re-aplicar estilos cuando cambian datos, métrica, sector o visibilidad de límites */
   useEffect(() => {
     if (dataLayerRef.current && geojsonLoaded.current) {
-      applyStyles(dataLayerRef.current, lookup.current, metrica, sector, sectorLookupRef.current);
+      applyStyles(dataLayerRef.current, lookup.current, metrica, showBorders ? sector : null, sectorLookupRef.current);
     }
-  }, [coloniaData, metrica, sector]);
+  }, [coloniaData, metrica, sector, showBorders]);
 
   return (
     <div style={{ width:'100%', height:'100%', position:'relative' }}>
@@ -385,7 +420,10 @@ export default function SuperadminHeatmap() {
   const [coloniaData,     setColoniaData]     = useState([]);
   const [drawer, setDrawer] = useState({ open:false, colonia:null, reportes:[], loading:false, expandedId:null });
   const sectorLookupRef = useRef({});
-  const [toastMsg, setToastMsg] = useState('');
+  const [toastMsg,              setToastMsg]              = useState('');
+  const [showBorders,           setShowBorders]           = useState(false);
+  const [coloniaModal,          setColoniaModal]          = useState(false);
+  const [coloniaListForSector,  setColoniaListForSector]  = useState([]);
 
   function showToast(msg) { setToastMsg(msg); }
 
@@ -488,6 +526,16 @@ export default function SuperadminHeatmap() {
   function clearCategoria() {
     setCategoriaId(null);
     setCategoriaNombre(null);
+  }
+
+  function openColoniaModal() {
+    if (!sector) return;
+    const list = Object.entries(sectorLookupRef.current)
+      .filter(([, s]) => s === sector)
+      .map(([colonia]) => colonia.replace(/(?:^|\s|-)\S/g, c => c.toUpperCase()))
+      .sort();
+    setColoniaListForSector(list);
+    setColoniaModal(true);
   }
 
   const catOpts   = categorias.map(c => ({ value: c.id, label: c.nombre }));
@@ -603,6 +651,23 @@ export default function SuperadminHeatmap() {
             {sector && (
               <button style={S.clearBtn} onClick={() => setSector(null)} title="Limpiar sector">×</button>
             )}
+            <label style={S.toggleLabel}>
+              <input
+                type="checkbox"
+                checked={showBorders}
+                onChange={e => setShowBorders(e.target.checked)}
+                style={{ cursor:'pointer' }}
+              />
+              Mostrar límites
+            </label>
+            <button
+              style={sector ? S.infoBtn : S.infoBtnDisabled}
+              onClick={openColoniaModal}
+              disabled={!sector}
+              title={sector ? `Ver colonias del sector ${sector}` : 'Selecciona un sector primero'}
+            >
+              ⓘ
+            </button>
           </div>
 
           {/* ── Estado de reportes (todos / abiertos / cerrados) ── */}
@@ -633,6 +698,7 @@ export default function SuperadminHeatmap() {
               coloniaData={coloniaData}
               metrica={metrica}
               sector={sector}
+              showBorders={showBorders}
               sectorLookupRef={sectorLookupRef}
               onColoniaClick={handleColoniaClick}
             />
@@ -656,6 +722,25 @@ export default function SuperadminHeatmap() {
         </div>
       </div>
       <Toast message={toastMsg} visible={!!toastMsg} />
+
+      {coloniaModal && (
+        <div style={S.modalOverlay} onClick={() => setColoniaModal(false)}>
+          <div style={S.modalBox} onClick={e => e.stopPropagation()}>
+            <div style={S.modalHeader}>
+              <span>Colonias · Sector {sector}</span>
+              <button style={S.drawerClose} onClick={() => setColoniaModal(false)}>✕</button>
+            </div>
+            <div style={S.modalBody}>
+              {coloniaListForSector.length === 0
+                ? <div style={S.drawerEmpty}>Sin colonias registradas para este sector.</div>
+                : coloniaListForSector.map(c => (
+                    <div key={c} style={S.coloniaItem}>{c}</div>
+                  ))
+              }
+            </div>
+          </div>
+        </div>
+      )}
     </SuperadminLayout>
   );
 }

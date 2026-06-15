@@ -126,8 +126,6 @@ async function heatmap(req, res) {
          )::float                             AS lng_centroid
        FROM reporte r
        LEFT JOIN subcategoria   sub ON sub.id  = r.subcategoria_id
-       LEFT JOIN colonia_sector cs  ON LOWER(cs.nombre_colonia) = LOWER(r.colonia)
-       LEFT JOIN sector         sec ON sec.id  = cs.sector_id
        LEFT JOIN colonia_poligono cp ON cp.id  = r.colonia_poligono_id
        WHERE ${estadoFilter}
          AND r.colonia    IS NOT NULL
@@ -135,7 +133,12 @@ async function heatmap(req, res) {
          AND r.longitud   IS NOT NULL
          AND ($1::uuid        IS NULL OR r.categoria_id = $1)
          AND ($2::text        IS NULL OR sub.nombre ILIKE $2)
-         AND ($3::text IS NULL OR LOWER(sec.nombre) = LOWER($3))
+         AND ($3::text IS NULL OR EXISTS (
+           SELECT 1 FROM colonia_poligono cp_s
+           JOIN sector s ON s.id = cp_s.sector_id
+           WHERE LOWER(cp_s.nombre) = LOWER(r.colonia)
+             AND LOWER(s.nombre)    = LOWER($3)
+         ))
          ${dateCondition}
          ${mineFilter}
        GROUP BY r.colonia
