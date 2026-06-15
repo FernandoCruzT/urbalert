@@ -133,11 +133,13 @@ async function heatmap(req, res) {
          AND r.longitud   IS NOT NULL
          AND ($1::uuid        IS NULL OR r.categoria_id = $1)
          AND ($2::text        IS NULL OR sub.nombre ILIKE $2)
-         AND ($3::text IS NULL OR EXISTS (
-           SELECT 1 FROM colonia_poligono cp_s
-           JOIN sector s ON s.id = cp_s.sector_id
-           WHERE LOWER(cp_s.nombre) = LOWER(r.colonia)
-             AND LOWER(s.nombre)    = LOWER($3)
+         AND ($3::text IS NULL OR (
+           r.colonia_poligono_id IS NOT NULL AND EXISTS (
+             SELECT 1 FROM colonia_poligono cp_s
+             JOIN sector s ON s.id = cp_s.sector_id
+             WHERE cp_s.id = r.colonia_poligono_id
+               AND LOWER(s.nombre) = LOWER($3)
+           )
          ))
          ${dateCondition}
          ${mineFilter}

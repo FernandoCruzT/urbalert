@@ -148,9 +148,19 @@ const S = {
     width:22, height:22, padding:0, display:'flex', alignItems:'center',
     justifyContent:'center', flexShrink:0, fontWeight:700, opacity:0.45,
   },
-  toggleLabel: {
+  toggleLabel: (disabled) => ({
     display:'flex', alignItems:'center', gap:'0.3rem', fontSize:'0.78rem',
-    color:'var(--color-text-muted)', userSelect:'none', cursor:'pointer', whiteSpace:'nowrap',
+    color: disabled ? '#C0C0C0' : 'var(--color-text-muted)',
+    userSelect:'none', cursor: disabled ? 'not-allowed' : 'pointer', whiteSpace:'nowrap',
+    opacity: disabled ? 0.5 : 1,
+  }),
+  infoBtnWrap: { position:'relative', display:'flex', alignItems:'center', flexShrink:0 },
+  btnTooltip: {
+    position:'absolute', bottom:'calc(100% + 6px)', left:'50%',
+    transform:'translateX(-50%)',
+    background:'rgba(0,0,0,0.78)', color:'#fff',
+    padding:'0.3rem 0.6rem', borderRadius:5, fontSize:'0.74rem',
+    pointerEvents:'none', whiteSpace:'nowrap', zIndex:60,
   },
   reportCard: (hovered) => ({
     padding:'0.6rem 0.7rem', borderRadius:'var(--radius-sm)', cursor:'pointer',
@@ -424,6 +434,7 @@ export default function SuperadminHeatmap() {
   const [showBorders,           setShowBorders]           = useState(false);
   const [coloniaModal,          setColoniaModal]          = useState(false);
   const [coloniaListForSector,  setColoniaListForSector]  = useState([]);
+  const [hoveredInfoBtn,        setHoveredInfoBtn]        = useState(false);
 
   function showToast(msg) { setToastMsg(msg); }
 
@@ -507,7 +518,10 @@ export default function SuperadminHeatmap() {
   useDidUpdateEffect(() => showToast(`Año: ${anio}`),                                                         [anio]);
   useDidUpdateEffect(() => showToast(`Mes: ${MESES[mes - 1]}`),                                               [mes]);
   useDidUpdateEffect(() => showToast(`Semana ${semana} — ${anio}`),                                           [semana]);
-  useDidUpdateEffect(() => showToast(sector ? `Sector: ${sector}` : 'Mostrando toda la ZMG'),                 [sector]);
+  useDidUpdateEffect(() => {
+    showToast(sector ? `Sector: ${sector}` : 'Mostrando toda la ZMG');
+    if (!sector) setShowBorders(false);
+  }, [sector]);
   useDidUpdateEffect(() => showToast(`Reportes: ${estado}`),                                                  [estado]);
   useDidUpdateEffect(() => showToast(`Vista: ${vista}`),                                                      [vista]);
   useDidUpdateEffect(() => showToast(categoriaNombre ? `Categoría: ${categoriaNombre}` : 'Sin filtro de categoría'), [categoriaId]);
@@ -651,23 +665,32 @@ export default function SuperadminHeatmap() {
             {sector && (
               <button style={S.clearBtn} onClick={() => setSector(null)} title="Limpiar sector">×</button>
             )}
-            <label style={S.toggleLabel}>
+            <label style={S.toggleLabel(!sector)}>
               <input
                 type="checkbox"
                 checked={showBorders}
                 onChange={e => setShowBorders(e.target.checked)}
-                style={{ cursor:'pointer' }}
+                disabled={!sector}
+                style={{ cursor: sector ? 'pointer' : 'not-allowed' }}
               />
               Mostrar límites
             </label>
-            <button
-              style={sector ? S.infoBtn : S.infoBtnDisabled}
-              onClick={openColoniaModal}
-              disabled={!sector}
-              title={sector ? `Ver colonias del sector ${sector}` : 'Selecciona un sector primero'}
-            >
-              ⓘ
-            </button>
+            <div style={S.infoBtnWrap}>
+              <button
+                style={sector ? S.infoBtn : S.infoBtnDisabled}
+                onClick={openColoniaModal}
+                disabled={!sector}
+                onMouseEnter={() => setHoveredInfoBtn(true)}
+                onMouseLeave={() => setHoveredInfoBtn(false)}
+              >
+                ⓘ
+              </button>
+              {hoveredInfoBtn && (
+                <div style={S.btnTooltip}>
+                  {sector ? 'Ver colonias del sector seleccionado' : 'Selecciona un sector primero'}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── Estado de reportes (todos / abiertos / cerrados) ── */}
