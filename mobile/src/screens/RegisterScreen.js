@@ -23,13 +23,28 @@ export default function RegisterScreen({ navigation }) {
   const [loading,   setLoading]   = useState(false);
   const [showPass,  setShowPass]  = useState(false);
 
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const NAME_RE  = /^[A-Za-záéíóúÁÉÍÓÚñÑüÜ\s]{2,50}$/;
+
   const handleRegister = async () => {
     if (!nombre.trim() || !email.trim() || !password.trim()) {
       Alert.alert('Campos requeridos', 'Nombre, email y contraseña son obligatorios.');
       return;
     }
-    if (password.length < 6) {
-      Alert.alert('Contraseña muy corta', 'Usa al menos 6 caracteres.');
+    if (!NAME_RE.test(nombre.trim())) {
+      Alert.alert('Nombre inválido', 'El nombre solo puede contener letras y espacios (2-50 caracteres).');
+      return;
+    }
+    if (!EMAIL_RE.test(email.trim())) {
+      Alert.alert('Email inválido', 'Ingresa un correo electrónico válido.');
+      return;
+    }
+    if (telefono.trim() && !/^\d{10}$/.test(telefono.replace(/[\s\-().]/g, ''))) {
+      Alert.alert('Teléfono inválido', 'El teléfono debe tener exactamente 10 dígitos.');
+      return;
+    }
+    if (password.length < 8) {
+      Alert.alert('Contraseña muy corta', 'Usa al menos 8 caracteres.');
       return;
     }
     setLoading(true);
@@ -108,7 +123,7 @@ export default function RegisterScreen({ navigation }) {
                 <TextInput
                   style={[s.input, { flex: 1, marginBottom: 0 }]}
                   value={password} onChangeText={setPassword}
-                  placeholder="Mín. 6 caracteres" placeholderTextColor="#9CA3AF"
+                  placeholder="Mín. 8 caracteres" placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showPass}
                 />
                 <TouchableOpacity onPress={() => setShowPass(v => !v)} style={s.eyeBtn}>

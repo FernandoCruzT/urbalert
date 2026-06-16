@@ -1,0 +1,107 @@
+custom,db_name,table_name,column_name,position,data_type,max_length,constraint,db_referenced,table_referenced,column_referenced
+custom,urbalert,asignacion,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,asignacion,reporte_id,2,uuid,N,FOREIGN KEY,urbalert,reporte,id
+custom,urbalert,asignacion,autoridad_id,3,uuid,N,FOREIGN KEY,urbalert,autoridad,id
+custom,urbalert,asignacion,tipo,4,character varying,20,N,N,N,N
+custom,urbalert,asignacion,motivo,5,text,N,N,N,N,N
+custom,urbalert,asignacion,asignado_por,6,uuid,N,FOREIGN KEY,urbalert,usuario,id
+custom,urbalert,asignacion,created_at,7,timestamp with time zone,N,N,N,N,N
+custom,urbalert,autoridad,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,autoridad,usuario_id,2,uuid,N,FOREIGN KEY,urbalert,usuario,id
+custom,urbalert,autoridad,categoria_id,3,uuid,N,FOREIGN KEY,urbalert,categoria,id
+custom,urbalert,autoridad,sector_id,4,uuid,N,FOREIGN KEY,urbalert,sector,id
+custom,urbalert,autoridad,departamento,5,character varying,150,N,N,N,N
+custom,urbalert,autoridad,carga_ponderada,6,integer,N,N,N,N,N
+custom,urbalert,autoridad,reportes_activos,7,integer,N,N,N,N,N
+custom,urbalert,autoridad,activo,8,boolean,N,N,N,N,N
+custom,urbalert,categoria,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,categoria,nombre,2,character varying,100,N,N,N,N
+custom,urbalert,ciudadano,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,ciudadano,usuario_id,2,uuid,N,FOREIGN KEY,urbalert,usuario,id
+custom,urbalert,ciudadano,estado_cuenta,3,character varying,20,N,N,N,N
+custom,urbalert,ciudadano,reportes_falsos,4,integer,N,N,N,N,N
+custom,urbalert,colonia_poligono,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,colonia_poligono,nombre,2,character varying,150,N,N,N,N
+custom,urbalert,colonia_poligono,municipio,3,character varying,100,N,N,N,N
+custom,urbalert,colonia_poligono,cp,4,character varying,5,N,N,N,N
+custom,urbalert,colonia_poligono,sector_id,5,uuid,N,FOREIGN KEY,urbalert,sector,id
+custom,urbalert,colonia_poligono,geom,6,USER-DEFINED,N,N,N,N,N
+custom,urbalert,colonia_sector,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,colonia_sector,sector_id,2,uuid,N,FOREIGN KEY,urbalert,sector,id
+custom,urbalert,colonia_sector,nombre_colonia,3,character varying,150,N,N,N,N
+custom,urbalert,colonia_sector,municipio,4,character varying,100,N,N,N,N
+custom,urbalert,foto_reporte,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,foto_reporte,reporte_id,2,uuid,N,FOREIGN KEY,urbalert,reporte,id
+custom,urbalert,foto_reporte,url_cloudinary,3,text,N,N,N,N,N
+custom,urbalert,foto_reporte,orden,4,integer,N,N,N,N,N
+custom,urbalert,foto_reporte,created_at,5,timestamp with time zone,N,N,N,N,N
+custom,urbalert,historial_estado,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,historial_estado,reporte_id,2,uuid,N,FOREIGN KEY,urbalert,reporte,id
+custom,urbalert,historial_estado,usuario_id,3,uuid,N,FOREIGN KEY,urbalert,usuario,id
+custom,urbalert,historial_estado,rol_usuario,4,character varying,20,N,N,N,N
+custom,urbalert,historial_estado,estado_anterior,5,character varying,20,N,N,N,N
+custom,urbalert,historial_estado,estado_nuevo,6,character varying,20,N,N,N,N
+custom,urbalert,historial_estado,observacion,7,text,N,N,N,N,N
+custom,urbalert,historial_estado,created_at,8,timestamp with time zone,N,N,N,N,N
+custom,urbalert,notificacion,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,notificacion,usuario_id,2,uuid,N,FOREIGN KEY,urbalert,usuario,id
+custom,urbalert,notificacion,reporte_id,3,uuid,N,FOREIGN KEY,urbalert,reporte,id
+custom,urbalert,notificacion,titulo,4,character varying,150,N,N,N,N
+custom,urbalert,notificacion,mensaje,5,text,N,N,N,N,N
+custom,urbalert,notificacion,leida,6,boolean,N,N,N,N,N
+custom,urbalert,notificacion,created_at,7,timestamp with time zone,N,N,N,N,N
+custom,urbalert,penalizacion,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,penalizacion,ciudadano_id,2,uuid,N,FOREIGN KEY,urbalert,ciudadano,id
+custom,urbalert,penalizacion,reporte_id,3,uuid,N,FOREIGN KEY,urbalert,reporte,id
+custom,urbalert,penalizacion,tipo_sancion,4,character varying,20,N,N,N,N
+custom,urbalert,penalizacion,inicio,5,timestamp with time zone,N,N,N,N,N
+custom,urbalert,penalizacion,fin,6,timestamp with time zone,N,N,N,N,N
+custom,urbalert,penalizacion,descripcion,7,text,N,N,N,N,N
+custom,urbalert,reporte,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,reporte,ciudadano_id,2,uuid,N,FOREIGN KEY,urbalert,ciudadano,id
+custom,urbalert,reporte,categoria_id,3,uuid,N,FOREIGN KEY,urbalert,categoria,id
+custom,urbalert,reporte,subcategoria_id,4,uuid,N,FOREIGN KEY,urbalert,subcategoria,id
+custom,urbalert,reporte,autoridad_id,5,uuid,N,FOREIGN KEY,urbalert,autoridad,id
+custom,urbalert,reporte,reporte_padre_id,6,uuid,N,FOREIGN KEY,urbalert,reporte,id
+custom,urbalert,reporte,descripcion,7,text,N,N,N,N,N
+custom,urbalert,reporte,urgencia,8,character varying,10,N,N,N,N
+custom,urbalert,reporte,estado,9,character varying,20,N,N,N,N
+custom,urbalert,reporte,calle,10,character varying,150,N,N,N,N
+custom,urbalert,reporte,numero,11,character varying,20,N,N,N,N
+custom,urbalert,reporte,colonia,12,character varying,150,N,N,N,N
+custom,urbalert,reporte,latitud,13,numeric,N,N,N,N,N
+custom,urbalert,reporte,longitud,14,numeric,N,N,N,N,N
+custom,urbalert,reporte,precision_gps,15,numeric,N,N,N,N,N
+custom,urbalert,reporte,ubicacion,16,USER-DEFINED,N,N,N,N,N
+custom,urbalert,reporte,created_at,17,timestamp with time zone,N,N,N,N,N
+custom,urbalert,reporte,updated_at,18,timestamp with time zone,N,N,N,N,N
+custom,urbalert,reporte,confirmaciones_duplicado,19,integer,N,N,N,N,N
+custom,urbalert,reporte,ubicacion_baja_precision,20,boolean,N,N,N,N,N
+custom,urbalert,reporte,colonia_poligono_id,21,uuid,N,FOREIGN KEY,urbalert,colonia_poligono,id
+custom,urbalert,sector,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,sector,nombre,2,character varying,50,N,N,N,N
+custom,urbalert,subcategoria,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,subcategoria,categoria_id,2,uuid,N,FOREIGN KEY,urbalert,categoria,id
+custom,urbalert,subcategoria,nombre,3,character varying,150,N,N,N,N
+custom,urbalert,subcategoria,urgencia,4,character varying,10,N,N,N,N
+custom,urbalert,subcategoria,razon_urgencia,5,character varying,255,N,N,N,N
+custom,urbalert,superadmin,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,superadmin,usuario_id,2,uuid,N,FOREIGN KEY,urbalert,usuario,id
+custom,urbalert,usuario,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,usuario,nombre,2,character varying,100,N,N,N,N
+custom,urbalert,usuario,apellido,3,character varying,100,N,N,N,N
+custom,urbalert,usuario,email,4,character varying,255,UNIQUE,N,N,N
+custom,urbalert,usuario,telefono,5,character varying,20,N,N,N,N
+custom,urbalert,usuario,password_hash,6,text,N,N,N,N,N
+custom,urbalert,usuario,rol,7,character varying,20,N,N,N,N
+custom,urbalert,usuario,created_at,8,timestamp with time zone,N,N,N,N,N
+custom,urbalert,usuario,requiere_cambio_password,9,boolean,N,N,N,N,N
+custom,urbalert,validacion,id,1,uuid,N,PRIMARY KEY,N,N,N
+custom,urbalert,validacion,reporte_id,2,uuid,N,FOREIGN KEY,urbalert,reporte,id
+custom,urbalert,validacion,superadmin_id,3,uuid,N,FOREIGN KEY,urbalert,superadmin,id
+custom,urbalert,validacion,resultado,4,character varying,30,N,N,N,N
+custom,urbalert,validacion,motivo,5,text,N,N,N,N,N
+custom,urbalert,validacion,similitud_texto,6,numeric,N,N,N,N,N
+custom,urbalert,validacion,distancia_duplicado,7,numeric,N,N,N,N,N
+custom,urbalert,validacion,reporte_similar_id,8,uuid,N,FOREIGN KEY,urbalert,reporte,id
+custom,urbalert,validacion,revisado_at,9,timestamp with time zone,N,N,N,N,N

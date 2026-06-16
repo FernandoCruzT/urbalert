@@ -73,6 +73,24 @@ async function markRead(req, res) {
 }
 
 /**
+ * PATCH /api/notifications/read-all
+ * Marca todas las notificaciones no leídas del usuario autenticado como leídas.
+ */
+async function markAllRead(req, res) {
+  try {
+    const result = await db.result(
+      `UPDATE notificacion SET leida = TRUE
+       WHERE usuario_id = $1 AND leida = FALSE`,
+      req.user.id
+    );
+    return res.json({ updated: result.rowCount });
+  } catch (err) {
+    console.error('[notifications.markAllRead]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+/**
  * GET /api/notifications/unread-count
  * Número de notificaciones no leídas del usuario autenticado.
  */
@@ -92,4 +110,4 @@ async function unreadCount(req, res) {
   }
 }
 
-module.exports = { list, markRead, unreadCount };
+module.exports = { list, markRead, markAllRead, unreadCount };

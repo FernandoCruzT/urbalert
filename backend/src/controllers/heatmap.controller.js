@@ -67,24 +67,31 @@ function buildDateRange(temporalidad, anio, mes, semana, vista = 'periodo') {
  */
 async function heatmap(req, res) {
   const {
-    temporalidad  = null,
-    anio          = null,
-    mes           = null,
-    semana        = null,
-    categoria_id  = null,
-    subcategoria  = null,
-    sector_nombre = null,
-    estado        = 'abiertos',
-    metrica       = 'cantidad',
-    vista         = 'periodo',
-    mine          = false,
+    temporalidad          = null,
+    anio                  = null,
+    mes                   = null,
+    semana                = null,
+    categoria_id          = null,
+    subcategoria          = null,
+    sector_nombre         = null,
+    estado                = 'abiertos',
+    metrica               = 'cantidad',
+    vista                 = 'periodo',
+    mine                  = false,
+    fecha_inicio_override = null,   // ISO date — sustituye el inicio calculado solo en vista=acumulado
   } = req.query;
 
   const anioNum   = anio   ? parseInt(anio,   10) : null;
   const mesNum    = mes    ? parseInt(mes,     10) : null;
   const semanaNum = semana ? parseInt(semana,  10) : null;
 
-  const { inicio, fin } = buildDateRange(temporalidad, anioNum, mesNum, semanaNum, vista);
+  let { inicio, fin } = buildDateRange(temporalidad, anioNum, mesNum, semanaNum, vista);
+
+  // Permite al cliente fijar su propio inicio de acumulado (ej. inicio del mes en mobile)
+  if (vista === 'acumulado' && fecha_inicio_override) {
+    const parsed = new Date(fecha_inicio_override);
+    if (!isNaN(parsed.getTime())) inicio = parsed;
+  }
 
   const pesoExpr = metrica === 'urgencia'
     ? `CASE r.urgencia WHEN 'alto' THEN 3 WHEN 'medio' THEN 2 ELSE 1 END`

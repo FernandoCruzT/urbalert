@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db } = require('../database/connection');
+const { isValidEmail, isValidPhone, isValidName, PASSWORD_MIN_LENGTH } = require('../utils/validators');
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -72,9 +73,16 @@ async function register(req, res) {
   if (!nombre || !apellido || !email || !password) {
     return res.status(400).json({ message: 'Faltan campos obligatorios: nombre, apellido, email, password' });
   }
-  if (password.length < 8) {
-    return res.status(400).json({ message: 'La contraseña debe tener al menos 8 caracteres' });
-  }
+  if (!isValidName(nombre))
+    return res.status(400).json({ message: 'Nombre inválido: solo letras y espacios (2-50 caracteres)' });
+  if (!isValidName(apellido))
+    return res.status(400).json({ message: 'Apellido inválido: solo letras y espacios (2-50 caracteres)' });
+  if (!isValidEmail(email))
+    return res.status(400).json({ message: 'Formato de correo inválido' });
+  if (telefono?.trim() && !isValidPhone(telefono))
+    return res.status(400).json({ message: 'El teléfono debe tener 10 dígitos' });
+  if (password.length < PASSWORD_MIN_LENGTH)
+    return res.status(400).json({ message: `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres` });
 
   try {
     const result = await db.tx(async (t) => {

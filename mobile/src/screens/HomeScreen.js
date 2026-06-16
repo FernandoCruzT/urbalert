@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, Animated, ImageBackground,
+  ActivityIndicator, Alert, ScrollView, ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -17,8 +17,8 @@ const DAYS_SHORT = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                 'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-const HERO_H = 280;
-const CITY_IMG = { uri: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800' };
+const HERO_H   = 220;
+const CITY_IMG = { uri: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200&q=80' };
 
 // ── MiniCalendar ──────────────────────────────────────────────────────────────
 
@@ -92,7 +92,7 @@ function MiniCalendar({ allReportDates }) {
   );
 }
 
-// ── MenuOption — lista vertical ───────────────────────────────────────────────
+// ── MenuOption ────────────────────────────────────────────────────────────────
 
 function MenuOption({ icon, label, onPress, highlight = false }) {
   return (
@@ -117,14 +117,6 @@ export default function HomeScreen({ navigation }) {
   const [allReportDates, setAllReportDates] = useState([]);
   const [loadingReports, setLoadingReports] = useState(true);
   const [unreadCount,    setUnreadCount]    = useState(0);
-
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  const heroTranslateY = scrollY.interpolate({
-    inputRange:  [0, HERO_H],
-    outputRange: [0, -HERO_H * 0.4],
-    extrapolate: 'clamp',
-  });
 
   useFocusEffect(
     useCallback(() => {
@@ -157,53 +149,35 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <View style={s.root}>
 
-        {/* ── Parallax hero ── */}
-        <Animated.View style={[s.hero, { transform: [{ translateY: heroTranslateY }] }]}>
-          <ImageBackground source={CITY_IMG} style={s.heroBg} resizeMode="cover">
-            {/* Overlay oscuro semitransparente */}
-            <View style={s.heroOverlay}>
-              <View style={s.heroInner}>
-                <View style={s.heroTop}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.greeting}>Hola, {firstName} 👋</Text>
-                    <Text style={s.subGreeting}>¿Qué reportamos hoy?</Text>
-                  </View>
-                  <View style={s.heroActions}>
-                    <TouchableOpacity
-                      onPress={() => navigation.navigate('Notifications')}
-                      style={s.heroBtn}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={s.heroBtnIcon}>🔔</Text>
-                      {unreadCount > 0 && (
-                        <View style={s.badge}>
-                          <Text style={s.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleLogout} style={s.heroBtn} activeOpacity={0.8}>
-                      <Text style={s.heroBtnIcon}>⎋</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={s.accentBar} />
-              </View>
-            </View>
-          </ImageBackground>
-        </Animated.View>
+      {/* ── Card de presentación fija detrás del scroll ── */}
+      <View style={s.heroCard}>
+        <ImageBackground source={CITY_IMG} style={StyleSheet.absoluteFill} resizeMode="cover">
+          <View style={s.heroOverlay} />
+        </ImageBackground>
 
-        {/* ── Scrollable content ── */}
-        <Animated.ScrollView
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
-          )}
-          scrollEventThrottle={16}
-          contentContainerStyle={s.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        {/* Saludo — los botones de acción están fuera de la card para evitar que el ScrollView bloquee sus toques */}
+        <View style={s.heroInner}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.greeting}>Hola, {firstName} 👋</Text>
+            <Text style={s.subGreeting}>¿Qué reportamos hoy?</Text>
+          </View>
+        </View>
+        <View style={s.accentBar} />
+      </View>
+
+      {/* ── ScrollView transparente: el spacer muestra la card, el contenido la tapa ── */}
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+      >
+        {/* pointerEvents='none': el spacer no captura toques (el ScrollView los gestiona para scroll) */}
+        <View style={s.heroSpacer} pointerEvents="none" />
+
+        {/* Superficie sólida que sube y tapa la card al hacer scroll */}
+        <View style={s.contentSurface}>
           {loadingReports
             ? <ActivityIndicator color={C.primary} style={{ marginVertical: 20 }} />
             : <MiniCalendar allReportDates={allReportDates} />
@@ -211,7 +185,7 @@ export default function HomeScreen({ navigation }) {
 
           <Text style={s.sectionTitle}>¿Qué deseas hacer?</Text>
 
-          <MenuOption icon="📝" label="Crear reporte"    highlight
+          <MenuOption icon="📝" label="Crear reporte" highlight
             onPress={() => navigation.navigate('NewReportStep1')} />
           <MenuOption icon="📋" label="Mis reportes"
             onPress={() => navigation.navigate('MyReports')} />
@@ -219,9 +193,28 @@ export default function HomeScreen({ navigation }) {
             onPress={() => navigation.navigate('Heatmap')} />
           <MenuOption icon="👤" label="Mi perfil"
             onPress={() => navigation.navigate('Profile')} />
-        </Animated.ScrollView>
+        </View>
+      </ScrollView>
 
+      {/* ── Botones flotantes: encima del ScrollView para recibir toques sin interferencia ── */}
+      <View style={s.floatingActions} pointerEvents="box-none">
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Notifications')}
+          style={s.heroBtn}
+          activeOpacity={0.8}
+        >
+          <Text style={s.heroBtnIcon}>🔔</Text>
+          {unreadCount > 0 && (
+            <View style={s.badge}>
+              <Text style={s.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleLogout} style={s.heroBtn} activeOpacity={0.8}>
+          <Text style={s.heroBtnIcon}>⎋</Text>
+        </TouchableOpacity>
       </View>
+
     </SafeAreaView>
   );
 }
@@ -229,23 +222,48 @@ export default function HomeScreen({ navigation }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: C.primary },
-  root:          { flex: 1, backgroundColor: C.background },
-  hero:          { position: 'absolute', top: 0, left: 0, right: 0, height: HERO_H, zIndex: 1 },
-  heroBg:        { flex: 1 },
-  heroOverlay:   { flex: 1, backgroundColor: 'rgba(86, 28, 36, 0.62)' },
-  heroInner:     { flex: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24, justifyContent: 'space-between' },
-  heroTop:       { flexDirection: 'row', alignItems: 'flex-start' },
-  heroActions:   { flexDirection: 'row', gap: 10, marginTop: 4 },
-  heroBtn:       { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  heroBtnIcon:   { fontSize: 18 },
-  badge:         { position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: C.primary },
-  badgeText:     { color: C.primary, fontSize: 9, fontWeight: '800' },
-  accentBar:     { height: 3, width: 48, backgroundColor: C.accent, borderRadius: 2 },
-  greeting:      { fontSize: 26, fontWeight: '800', color: '#FFFFFF' },
-  subGreeting:   { fontSize: 14, color: 'rgba(255,255,255,0.78)', marginTop: 4 },
-  scrollContent: { paddingTop: HERO_H + 16, paddingHorizontal: 20, paddingBottom: 40 },
-  sectionTitle:  { fontSize: 16, fontWeight: '700', color: C.primary, marginTop: 24, marginBottom: 12 },
+  safe: { flex: 1, backgroundColor: C.primary },
+
+  // Card de presentación: fija detrás del scroll (position absolute)
+  heroCard:    { position: 'absolute', top: 0, left: 0, right: 0, height: HERO_H, overflow: 'hidden' },
+  heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(86,28,36,0.50)' },
+  heroInner:      { flexDirection: 'row', alignItems: 'flex-start',
+                    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 0 },
+  floatingActions:{ position: 'absolute', top: 16, right: 20, zIndex: 20,
+                    flexDirection: 'row', gap: 10 },
+  heroBtn:     { width: 38, height: 38, borderRadius: 19,
+                 backgroundColor: 'rgba(255,255,255,0.18)',
+                 alignItems: 'center', justifyContent: 'center' },
+  heroBtnIcon: { fontSize: 18 },
+  badge:       { position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17,
+                 borderRadius: 9, backgroundColor: C.accent, alignItems: 'center',
+                 justifyContent: 'center', paddingHorizontal: 3,
+                 borderWidth: 1.5, borderColor: C.primary },
+  badgeText:   { color: C.primary, fontSize: 9, fontWeight: '800' },
+  accentBar:   { height: 3, width: 48, backgroundColor: C.accent,
+                 borderRadius: 2, marginLeft: 20, marginTop: 12 },
+  greeting:    { fontSize: 26, fontWeight: '800', color: '#FFFFFF' },
+  subGreeting: { fontSize: 14, color: 'rgba(255,255,255,0.78)', marginTop: 4 },
+
+  // ScrollView: transparente para que la card se vea a través del spacer
+  scroll:        { flex: 1, backgroundColor: 'transparent' },
+  scrollContent: { flexGrow: 1 },
+
+  // Spacer transparente igual al alto de la card
+  heroSpacer: { height: HERO_H },
+
+  // Superficie sólida que tapa la card al hacer scroll hacia abajo
+  contentSurface: {
+    backgroundColor: C.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: C.primary,
+                  marginTop: 20, marginBottom: 12 },
 });
 
 const cal = StyleSheet.create({
@@ -272,11 +290,9 @@ const menu = StyleSheet.create({
     elevation: 2, shadowColor: '#000', shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: 2 }, shadowRadius: 6,
   },
-  rowHighlight: {
-    borderLeftWidth: 4, borderLeftColor: C.accent,
-  },
-  label:      { flex: 1, fontSize: 16, fontWeight: '700', color: C.primary },
-  arrow:      { fontSize: 20, color: '#9CA3AF', marginRight: 12, fontWeight: '300' },
-  iconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
-  icon:       { fontSize: 22 },
+  rowHighlight: { borderLeftWidth: 4, borderLeftColor: C.accent },
+  label:        { flex: 1, fontSize: 16, fontWeight: '700', color: C.primary },
+  arrow:        { fontSize: 20, color: '#9CA3AF', marginRight: 12, fontWeight: '300' },
+  iconCircle:   { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
+  icon:         { fontSize: 22 },
 });

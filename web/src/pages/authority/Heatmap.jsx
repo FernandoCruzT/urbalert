@@ -3,15 +3,34 @@ import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { useNavigate } from 'react-router-dom';
 import AuthorityLayout from '../../layouts/AuthorityLayout';
 import api from '../../services/api';
+import Toast from '../../components/Toast';
 
-const LIBRARIES  = [];
-const MAP_CENTER = { lat: 20.6597, lng: -103.3496 };
+const LIBRARIES     = [];
+const MAP_CENTER    = { lat: 20.6597, lng: -103.3496 };
+const CURRENT_YEAR  = new Date().getFullYear();
+const CURRENT_MONTH = new Date().getMonth() + 1;
+const MIN_YEAR      = 2026;
+const YEARS         = Array.from({ length: CURRENT_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i);
 
 const TEMPORALIDAD_OPTS = ['año', 'mes', 'semana'];
-const ESTADO_OPTS       = ['abiertos', 'cerrados'];
+const ESTADO_OPTS       = ['todos', 'abiertos', 'cerrados'];
 const METRICA_OPTS      = ['cantidad', 'urgencia'];
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const CURRENT_YEAR = new Date().getFullYear();
+
+function maxSemanaForAnio(anio) {
+  if (anio < CURRENT_YEAR) return 52;
+  return Math.max(1, Math.min(52, Math.ceil((new Date() - new Date(anio, 0, 1)) / (7 * 24 * 60 * 60 * 1000))));
+}
+
+/* Dispara fn en updates pero no en el montaje inicial. */
+function useDidUpdateEffect(fn, deps) {
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    fn();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
 
 // ── Choropleth helpers ────────────────────────────────────────────────────────
 
@@ -56,8 +75,9 @@ const S = {
   menu:        { position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 50, backgroundColor: 'var(--color-surface)', boxShadow: 'var(--shadow-md)', borderRadius: 'var(--radius-sm)', minWidth: 150, overflow: 'hidden' },
   menuItem:    (active) => ({ display: 'block', width: '100%', padding: '0.5rem 0.85rem', background: active ? 'var(--color-primary)' : 'none', border: 'none', color: active ? '#fff' : 'var(--color-text)', fontSize: '0.82rem', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }),
   numInput:    { padding: '0.4rem 0.5rem', border: '1px solid #D1D5DB', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', fontFamily: 'inherit', color: 'var(--color-text)', width: 72, outline: 'none' },
+  yearSelect:  { padding: '0.4rem 0.5rem', border: '1px solid #D1D5DB', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', fontFamily: 'inherit', color: 'var(--color-text)', outline: 'none', cursor: 'pointer' },
   filterGroup: { display: 'flex', alignItems: 'center', gap: '0.35rem' },
-  yearFixed:   { padding: '0.42rem 0.7rem', border: '1px solid #E5E7EB', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--color-text-muted)', background: '#F9FAFB' },
+  clearBtn:    { background:'none', border:'1px solid #D1D5DB', borderRadius:'50%', cursor:'pointer', fontSize:'0.72rem', color:'var(--color-text-muted)', width:20, height:20, padding:0, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 },
   legend:      { position: 'absolute', bottom: 24, right: 12, background: 'rgba(255,255,255,0.92)', padding: '0.5rem 0.75rem', borderRadius: 8, boxShadow: 'var(--shadow-sm)', fontSize: '0.75rem', zIndex: 10, display: 'flex', flexDirection: 'column', gap: 4 },
   legendRow:   { display: 'flex', alignItems: 'center', gap: 6 },
   legendBox:   (color) => ({ width: 14, height: 14, borderRadius: 3, background: color, flexShrink: 0 }),
@@ -203,7 +223,6 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
     dataLayer.addListener('mouseout', (event) => {
       map.setOptions({ draggableCursor: null }); setTooltip(null); dataLayer.revertStyle(event.feature);
     });
-    // Click: abrir drawer de la colonia
     dataLayer.addListener('click', (event) => {
       const nombre    = event.feature.getProperty('nombre');
       const municipio = event.feature.getProperty('municipio');
@@ -241,15 +260,19 @@ export default function AuthorityHeatmap() {
   const navigate = useNavigate();
   const [temporalidad,  setTemporalidad]  = useState('mes');
   const [anio,          setAnio]          = useState(CURRENT_YEAR);
-  const [mes,           setMes]           = useState(new Date().getMonth() + 1);
+  const [mes,           setMes]           = useState(CURRENT_MONTH);
   const [semana,        setSemana]        = useState(1);
   const [subcategorias, setSubcategorias] = useState([]);
   const [subcatId,      setSubcatId]      = useState(null);
   const [subcatNombre,  setSubcatNombre]  = useState(null);
   const [estado,        setEstado]        = useState('abiertos');
+  const [vista,         setVista]         = useState('periodo');
   const [metrica,       setMetrica]       = useState('cantidad');
   const [coloniaData,   setColoniaData]   = useState([]);
   const [drawer, setDrawer] = useState({ open:false, colonia:null, reportes:[], loading:false });
+  const [toastMsg, setToastMsg] = useState('');
+
+  function showToast(msg) { setToastMsg(msg); }
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_KEY || '',
@@ -264,17 +287,42 @@ export default function AuthorityHeatmap() {
       }).catch(() => {});
   }, []);
 
+  /* Clampear semana si cambia el año */
+  useEffect(() => {
+    if (temporalidad === 'semana') {
+      setSemana(s => Math.max(1, Math.min(maxSemanaForAnio(anio), s)));
+    }
+  }, [anio, temporalidad]);
+
+  /* Si al cambiar el año el mes queda en el futuro, resetear al mes actual */
+  useDidUpdateEffect(() => {
+    if (anio === CURRENT_YEAR && mes > CURRENT_MONTH) {
+      setMes(CURRENT_MONTH);
+      showToast('Mes ajustado al mes actual');
+    }
+  }, [anio]);
+
   const fetchData = useCallback(() => {
-    const params = { mine: true, estado, metrica, temporalidad, anio };
+    const params = { mine: true, estado, metrica, vista, temporalidad, anio };
     if (temporalidad === 'mes')    params.mes    = mes;
     if (temporalidad === 'semana') params.semana = semana;
     if (subcatId) params.subcategoria = subcatNombre;
     api.get('/heatmap', { params })
       .then(({ data }) => setColoniaData(data.colonias || []))
       .catch(() => setColoniaData([]));
-  }, [temporalidad, anio, mes, semana, subcatId, subcatNombre, estado, metrica]);
+  }, [temporalidad, anio, mes, semana, subcatId, subcatNombre, estado, vista, metrica]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  /* Toasts por cambio de filtro (no en montaje inicial) */
+  useDidUpdateEffect(() => showToast(`Filtrando por ${temporalidad}`),                                    [temporalidad]);
+  useDidUpdateEffect(() => showToast(`Año: ${anio}`),                                                     [anio]);
+  useDidUpdateEffect(() => showToast(`Mes: ${MESES[mes - 1]}`),                                           [mes]);
+  useDidUpdateEffect(() => showToast(`Semana ${semana} — ${anio}`),                                       [semana]);
+  useDidUpdateEffect(() => showToast(`Vista: ${vista}`),                                                  [vista]);
+  useDidUpdateEffect(() => showToast(`Reportes: ${estado}`),                                              [estado]);
+  useDidUpdateEffect(() => showToast(`Métrica: ${metrica}`),                                              [metrica]);
+  useDidUpdateEffect(() => showToast(subcatNombre ? `Subcategoría: ${subcatNombre}` : 'Sin filtro de subcategoría'), [subcatId]);
 
   const handleColoniaClick = useCallback((nombre, municipio) => {
     setDrawer({ open:true, colonia:nombre, municipio: municipio || null, reportes:[], loading:true });
@@ -285,36 +333,88 @@ export default function AuthorityHeatmap() {
       .catch(() => setDrawer(d => ({ ...d, loading:false, reportes:[] })));
   }, [estado]);
 
+  const maxSemana = maxSemanaForAnio(anio);
+
   return (
     <AuthorityLayout>
       <div style={S.page}>
         <div style={S.pageTitle}>Mapa de calor</div>
 
         <div style={S.filters}>
+
+          {/* ── Temporalidad ── */}
           <div style={S.filterGroup}>
             <Dropdown label="Temporalidad" options={TEMPORALIDAD_OPTS} value={temporalidad} onChange={v => setTemporalidad(v)} />
             {temporalidad === 'año' && (
-              <input style={S.numInput} type="number" min="2000" max="2099" value={anio} onChange={e => setAnio(Number(e.target.value))} />
+              <select style={S.yearSelect} value={anio} onChange={e => setAnio(Number(e.target.value))}>
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
             )}
             {temporalidad === 'mes' && (
               <>
-                <Dropdown label="Mes" options={MESES.map((m, i) => ({ value: i + 1, label: m }))}
-                  value={MESES[mes - 1]} onChange={v => setMes(Number(v))} />
-                <input style={S.numInput} type="number" min="2000" max="2099" value={anio} onChange={e => setAnio(Number(e.target.value))} />
+                <select
+                  style={S.yearSelect}
+                  value={mes}
+                  onChange={e => {
+                    const newMes = Number(e.target.value);
+                    if (anio === CURRENT_YEAR && newMes > CURRENT_MONTH) {
+                      showToast('No puedes filtrar por meses futuros');
+                      return;
+                    }
+                    setMes(newMes);
+                  }}
+                >
+                  {MESES.map((m, i) => (
+                    <option key={i + 1} value={i + 1} disabled={anio === CURRENT_YEAR && i + 1 > CURRENT_MONTH}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <select style={S.yearSelect} value={anio} onChange={e => setAnio(Number(e.target.value))}>
+                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
               </>
             )}
             {temporalidad === 'semana' && (
               <>
-                <input style={S.numInput} type="number" min="1" max="52" value={semana}
-                  onChange={e => setSemana(Number(e.target.value))} placeholder="Semana" />
-                <span style={S.yearFixed}>{CURRENT_YEAR}</span>
+                <input
+                  style={S.numInput}
+                  type="number"
+                  min="1"
+                  max={maxSemana}
+                  value={semana}
+                  onChange={e => setSemana(Math.max(1, Math.min(maxSemana, Number(e.target.value))))}
+                  placeholder="Semana"
+                />
+                <select style={S.yearSelect} value={anio} onChange={e => setAnio(Number(e.target.value))}>
+                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
               </>
             )}
           </div>
-          <Dropdown label="Subcategoría" options={subcategorias} value={subcatNombre}
-            onChange={(v, lbl) => { setSubcatId(v); setSubcatNombre(lbl); }} />
+
+          {/* ── Subcategoría ── */}
+          <div style={S.filterGroup}>
+            <Dropdown label="Subcategoría" options={subcategorias} value={subcatNombre}
+              onChange={(v, lbl) => { setSubcatId(v); setSubcatNombre(lbl); }} />
+            {subcatId && (
+              <button
+                style={S.clearBtn}
+                onClick={() => { setSubcatId(null); setSubcatNombre(null); showToast('Sin filtro de subcategoría'); }}
+                title="Limpiar subcategoría"
+              >×</button>
+            )}
+          </div>
+
+          {/* ── Estado ── */}
           <Dropdown label="Reportes" options={ESTADO_OPTS} value={estado} onChange={v => setEstado(v)} />
-          <Dropdown label="Métrica"  options={METRICA_OPTS} value={metrica} onChange={v => setMetrica(v)} />
+
+          {/* ── Vista ── */}
+          <Dropdown label="Vista" options={['periodo', 'acumulado']} value={vista} onChange={v => setVista(v)} />
+
+          {/* ── Métrica ── */}
+          <Dropdown label="Métrica" options={METRICA_OPTS} value={metrica} onChange={v => setMetrica(v)} />
+
         </div>
 
         <div style={S.mapWrap}>
@@ -334,6 +434,7 @@ export default function AuthorityHeatmap() {
           )}
         </div>
       </div>
+      <Toast message={toastMsg} visible={!!toastMsg} />
     </AuthorityLayout>
   );
 }

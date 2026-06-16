@@ -71,14 +71,21 @@ export default function NewProfile() {
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setA = (k, v) => setAuthForm(p => ({ ...p, [k]: v }));
 
+  const NAME_RE  = /^[A-Za-záéíóúÁÉÍÓÚñÑüÜ\s]{2,50}$/;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   function validate() {
     const errs = {};
-    if (!form.nombre.trim())    errs.nombre    = 'Campo obligatorio';
-    if (!form.apellido.trim())  errs.apellido  = 'Campo obligatorio';
-    if (!form.email.trim())     errs.email     = 'Campo obligatorio';
-    else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Email inválido';
-    if (!form.password)         errs.password  = 'Campo obligatorio';
-    else if (form.password.length < 8)         errs.password = 'Mínimo 8 caracteres';
+    if (!form.nombre.trim())   errs.nombre   = 'Campo obligatorio';
+    else if (!NAME_RE.test(form.nombre.trim()))   errs.nombre   = 'Solo letras y espacios (2-50 caracteres)';
+    if (!form.apellido.trim()) errs.apellido = 'Campo obligatorio';
+    else if (!NAME_RE.test(form.apellido.trim())) errs.apellido = 'Solo letras y espacios (2-50 caracteres)';
+    if (!form.email.trim())    errs.email    = 'Campo obligatorio';
+    else if (!EMAIL_RE.test(form.email))          errs.email    = 'Email inválido';
+    if (form.telefono.trim() && !/^\d{10}$/.test(form.telefono.replace(/[\s\-().]/g, '')))
+      errs.telefono = 'Debe tener 10 dígitos';
+    if (!form.password)        errs.password = 'Campo obligatorio';
+    else if (form.password.length < 8)            errs.password = 'Mínimo 8 caracteres';
 
     if (tipo === 'autoridad') {
       if (!authForm.categoria_id) errs.categoria_id = 'Selecciona una categoría';
@@ -222,8 +229,8 @@ export default function NewProfile() {
                   placeholder="correo@ejemplo.com" autoComplete="off" />
               </Field>
 
-              <Field label="Teléfono">
-                <input style={S.input} type="tel" value={form.telefono}
+              <Field label="Teléfono" error={errors.telefono}>
+                <input style={{ ...S.input, ...(errors.telefono ? S.inputErr : {}) }} type="tel" value={form.telefono}
                   onChange={e => setF('telefono', e.target.value)} placeholder="10 dígitos (opcional)" />
               </Field>
 
