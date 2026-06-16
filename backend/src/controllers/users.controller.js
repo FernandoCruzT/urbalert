@@ -10,9 +10,11 @@ const { isValidEmail, isValidPhone, isValidName, PASSWORD_MIN_LENGTH } = require
  * El usuario creado tendrá requiere_cambio_password = TRUE.
  */
 async function createAuthority(req, res) {
-  const { nombre, apellido, email, telefono, password, categoria_id, sector_id, departamento } = req.body;
+  const { nombre, apellido, email, telefono, password, categoria_id, municipio, departamento } = req.body;
 
-  const faltantes = ['nombre', 'apellido', 'email', 'password', 'categoria_id', 'sector_id']
+  const MUNICIPIOS_VALIDOS = ['Guadalajara', 'Zapopan', 'Tonalá', 'San Pedro Tlaquepaque'];
+
+  const faltantes = ['nombre', 'apellido', 'email', 'password', 'categoria_id', 'municipio']
     .filter((k) => !req.body[k]);
   if (faltantes.length) {
     return res.status(400).json({ message: `Faltan campos obligatorios: ${faltantes.join(', ')}` });
@@ -27,6 +29,8 @@ async function createAuthority(req, res) {
     return res.status(400).json({ message: 'El teléfono debe tener 10 dígitos' });
   if (password.length < PASSWORD_MIN_LENGTH)
     return res.status(400).json({ message: `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres` });
+  if (!MUNICIPIOS_VALIDOS.includes(municipio))
+    return res.status(400).json({ message: `Municipio inválido. Opciones: ${MUNICIPIOS_VALIDOS.join(', ')}` });
 
   try {
     const result = await db.tx(async (t) => {
@@ -37,8 +41,6 @@ async function createAuthority(req, res) {
 
       const cat = await t.oneOrNone(`SELECT id FROM categoria WHERE id = $1`, categoria_id);
       if (!cat) throw { status: 404, message: 'Categoría no encontrada' };
-      const sec = await t.oneOrNone(`SELECT id FROM sector WHERE id = $1`, sector_id);
-      if (!sec) throw { status: 404, message: 'Sector no encontrado' };
 
       const password_hash = await bcrypt.hash(password, 12);
 
@@ -51,10 +53,10 @@ async function createAuthority(req, res) {
       );
 
       const autoridad = await t.one(
-        `INSERT INTO autoridad (usuario_id, categoria_id, sector_id, departamento)
+        `INSERT INTO autoridad (usuario_id, categoria_id, municipio, departamento)
          VALUES ($1, $2, $3, $4)
          RETURNING id, departamento, carga_ponderada, reportes_activos, activo`,
-        [usuario.id, categoria_id, sector_id, departamento?.trim() || null]
+        [usuario.id, categoria_id, municipio, departamento?.trim() || null]
       );
 
       return { usuario, autoridad };
@@ -84,6 +86,7 @@ async function listAuthorities(req, res) {
       `SELECT
          a.id,
          a.departamento,
+         a.municipio,
          a.carga_ponderada,
          a.reportes_activos,
          a.activo,
@@ -94,13 +97,10 @@ async function listAuthorities(req, res) {
          u.telefono,
          u.created_at,
          c.id        AS categoria_id,
-         c.nombre    AS categoria_nombre,
-         s.id        AS sector_id,
-         s.nombre    AS sector_nombre
+         c.nombre    AS categoria_nombre
        FROM autoridad a
        JOIN usuario   u ON u.id = a.usuario_id
        JOIN categoria c ON c.id = a.categoria_id
-       JOIN sector    s ON s.id = a.sector_id
        ORDER BY a.activo DESC, u.apellido ASC, u.nombre ASC`
     );
 
@@ -218,33 +218,33 @@ async function listCitizens(req, res) {
 // ─── listSectors ─────────────────────────────────────────────────────────────
 
 /**
- * GET /api/users/sectors
- * Devuelve un sector por nombre (evita duplicados de la migración).
+ * GET /api/users/municipios
+ * Devuelve los municipios válidos para asignar a una autoridad.
  */
-async function listSectors(req, res) {
-  try {
-    const sectores = await db.any(
-      `SELECT DISTINCT ON (nombre) id, nombre FROM sector ORDER BY nombre, id`
-    );
-    return res.json({ sectores });
-  } catch (err) {
-    console.error('[users.listSectors]', err);
-    return res.status(500).json({ message: 'Error interno del servidor' });
-  }
+async function listMunicipios(req, res) {
+  return res.json({
+    municipios: ['Guadalajara', 'Zapopan', 'Tonalá', 'San Pedro Tlaquepaque'],
+  });
 }
 
 // ─── updateAuthority ─────────────────────────────────────────────────────────
 
 /**
  * PATCH /api/users/authority/:id
- * Edita categoria_id, sector_id y/o departamento de una autoridad.
+ * Edita categoria_id, municipio y/o departamento de una autoridad.
  */
 async function updateAuthority(req, res) {
   const { id } = req.params;
-  const { categoria_id, sector_id, departamento } = req.body;
+  const { categoria_id, municipio, departamento } = req.body;
 
-  if (!categoria_id && !sector_id && departamento === undefined) {
+  if (!categoria_id && !municipio && departamento === undefined) {
     return res.status(400).json({ message: 'No se recibió ningún campo para actualizar' });
+  }
+
+  const MUNICIPIOS_VALIDOS = ['Guadalajara', 'Zapopan', 'Tonalá', 'San Pedro Tlaquepaque'];
+
+  if (municipio && !MUNICIPIOS_VALIDOS.includes(municipio)) {
+    return res.status(400).json({ message: `Municipio inválido. Opciones: ${MUNICIPIOS_VALIDOS.join(', ')}` });
   }
 
   try {
@@ -256,18 +256,14 @@ async function updateAuthority(req, res) {
         const cat = await t.oneOrNone(`SELECT id FROM categoria WHERE id = $1`, categoria_id);
         if (!cat) throw { status: 404, message: 'Categoría no encontrada' };
       }
-      if (sector_id) {
-        const sec = await t.oneOrNone(`SELECT id FROM sector WHERE id = $1`, sector_id);
-        if (!sec) throw { status: 404, message: 'Sector no encontrado' };
-      }
 
       await t.none(
         `UPDATE autoridad
-         SET categoria_id  = COALESCE($1, categoria_id),
-             sector_id     = COALESCE($2, sector_id),
-             departamento  = COALESCE($3, departamento)
+         SET categoria_id = COALESCE($1, categoria_id),
+             municipio    = COALESCE($2, municipio),
+             departamento = COALESCE($3, departamento)
          WHERE id = $4`,
-        [categoria_id || null, sector_id || null,
+        [categoria_id || null, municipio || null,
          departamento !== undefined ? departamento.trim() : null, id]
       );
     });
@@ -334,4 +330,4 @@ async function deactivateAuthority(req, res) {
   }
 }
 
-module.exports = { createAuthority, listAuthorities, getCitizen, suspendCitizen, listCitizens, listSectors, updateAuthority, deactivateAuthority };
+module.exports = { createAuthority, listAuthorities, getCitizen, suspendCitizen, listCitizens, listMunicipios, updateAuthority, deactivateAuthority };

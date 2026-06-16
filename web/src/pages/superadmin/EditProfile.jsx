@@ -244,28 +244,25 @@ function EditCiudadano({ usuarioId }) {
 
 function EditAutoridad({ autoridadId }) {
   const navigate = useNavigate();
-  const [data,        setData]        = useState(null);
-  const [sectores,    setSectores]    = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState('');
-  const [notice,      setNotice]      = useState('');
-  const [fechaFiltro, setFechaFiltro] = useState('todo');
-  const [modal,       setModal]       = useState(null); // 'depto' | 'sector' | 'borrar'
-  const [deptoInput,  setDeptoInput]  = useState('');
-  const [sectorSel,   setSectorSel]   = useState('');
-  const [busy,        setBusy]        = useState(false);
+  const MUNICIPIOS = ['Guadalajara', 'Zapopan', 'Tonalá', 'San Pedro Tlaquepaque'];
+
+  const [data,          setData]          = useState(null);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState('');
+  const [notice,        setNotice]        = useState('');
+  const [fechaFiltro,   setFechaFiltro]   = useState('todo');
+  const [modal,         setModal]         = useState(null); // 'depto' | 'municipio' | 'borrar'
+  const [deptoInput,    setDeptoInput]    = useState('');
+  const [municipioSel,  setMunicipioSel]  = useState('');
+  const [busy,          setBusy]          = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      api.get('/users/authorities'),
-      api.get('/users/sectors'),
-    ]).then(([authRes, secRes]) => {
+    api.get('/users/authorities').then(authRes => {
       const found = (authRes.data.autoridades || []).find(a => String(a.id) === String(autoridadId));
       if (!found) { setError('Autoridad no encontrada'); return; }
       setData(found);
       setDeptoInput(found.departamento || '');
-      setSectorSel(String(found.sector_id || ''));
-      setSectores(secRes.data.sectores || []);
+      setMunicipioSel(found.municipio || '');
     }).catch(() => setError('No se pudo cargar el perfil de la autoridad'))
       .finally(() => setLoading(false));
   }, [autoridadId]);
@@ -282,16 +279,15 @@ function EditAutoridad({ autoridadId }) {
     } finally { setBusy(false); }
   }
 
-  async function handleUpdateSector() {
+  async function handleUpdateMunicipio() {
     setBusy(true);
     try {
-      await api.patch(`/users/authority/${autoridadId}`, { sector_id: Number(sectorSel) });
-      const sec = sectores.find(s => String(s.id) === String(sectorSel));
-      setData(prev => ({ ...prev, sector_id: Number(sectorSel), sector_nombre: sec?.nombre || prev.sector_nombre }));
-      setNotice('Sector actualizado correctamente');
+      await api.patch(`/users/authority/${autoridadId}`, { municipio: municipioSel });
+      setData(prev => ({ ...prev, municipio: municipioSel }));
+      setNotice('Municipio actualizado correctamente');
       setModal(null);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Error al actualizar el sector');
+      setError(err?.response?.data?.message || 'Error al actualizar el municipio');
     } finally { setBusy(false); }
   }
 
@@ -348,8 +344,8 @@ function EditAutoridad({ autoridadId }) {
           <button style={S.btn} onClick={() => { setDeptoInput(data.departamento || ''); setModal('depto'); }}>
             Cambiar departamento
           </button>
-          <button style={S.btn} onClick={() => { setSectorSel(String(data.sector_id || '')); setModal('sector'); }}>
-            Cambiar sector
+          <button style={S.btn} onClick={() => { setMunicipioSel(data.municipio || ''); setModal('municipio'); }}>
+            Cambiar municipio
           </button>
           <button style={S.btnDanger} onClick={() => setModal('borrar')}>
             Borrar cuenta
@@ -363,7 +359,7 @@ function EditAutoridad({ autoridadId }) {
           <thead>
             <tr>
               <th style={S.th}>Categoría</th>
-              <th style={S.th}>Sector</th>
+              <th style={S.th}>Municipio</th>
               <th style={S.th}>Departamento</th>
               <th style={{ ...S.th, textAlign: 'center' }}>Carga</th>
               <th style={{ ...S.th, textAlign: 'center' }}>Reportes activos</th>
@@ -372,7 +368,7 @@ function EditAutoridad({ autoridadId }) {
           <tbody>
             <tr>
               <td style={S.td}>{data.categoria_nombre || '—'}</td>
-              <td style={S.td}>{data.sector_nombre || '—'}</td>
+              <td style={S.td}>{data.municipio || '—'}</td>
               <td style={S.td}>{data.departamento || <span style={{ color: 'var(--color-text-muted)' }}>—</span>}</td>
               <td style={{ ...S.td, textAlign: 'center' }}>
                 {data.carga_ponderada != null ? Number(data.carga_ponderada).toFixed(1) : '—'}
@@ -402,22 +398,22 @@ function EditAutoridad({ autoridadId }) {
         </Modal>
       )}
 
-      {/* Modal sector */}
-      {modal === 'sector' && (
-        <Modal title="Cambiar sector" onClose={() => setModal(null)}>
+      {/* Modal municipio */}
+      {modal === 'municipio' && (
+        <Modal title="Cambiar municipio" onClose={() => setModal(null)}>
           <select
             style={S.modalSelect}
-            value={sectorSel}
-            onChange={e => setSectorSel(e.target.value)}
+            value={municipioSel}
+            onChange={e => setMunicipioSel(e.target.value)}
           >
-            <option value="">— Selecciona un sector —</option>
-            {sectores.map(s => (
-              <option key={s.id} value={s.id}>{s.nombre}</option>
+            <option value="">— Selecciona un municipio —</option>
+            {MUNICIPIOS.map(m => (
+              <option key={m} value={m}>{m}</option>
             ))}
           </select>
           <div style={S.modalRow}>
             <button style={S.btnSecondary} onClick={() => setModal(null)}>Cancelar</button>
-            <button style={S.btnPrimary} onClick={handleUpdateSector} disabled={busy || !sectorSel}>
+            <button style={S.btnPrimary} onClick={handleUpdateMunicipio} disabled={busy || !municipioSel}>
               {busy ? 'Guardando…' : 'Guardar'}
             </button>
           </div>

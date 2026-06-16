@@ -19,8 +19,7 @@ async function insertarHistorial(t, { reporte_id, estado_anterior, estado_nuevo,
  *
  * Criterios de selección:
  *   1. categoria_id del reporte coincide con categoria_id de la autoridad
- *   2. sector_id de la autoridad cubre la colonia del reporte
- *      (via colonia_sector, comparación case-insensitive)
+ *   2. municipio de la autoridad coincide con el municipio de la colonia del reporte
  *   3. Menor carga_ponderada; en empate, menor reportes_activos
  *
  * @param {string} reporte_id
@@ -68,28 +67,28 @@ async function assignReport(reporte_id) {
        WHERE a.categoria_id = $1
          AND a.activo = TRUE
          AND (
-           -- Opción A: sector del polígono ya asignado al reporte
+           -- Opción A: municipio del polígono ya asignado al reporte
            ($3::uuid IS NOT NULL
-            AND a.sector_id = (SELECT sector_id FROM colonia_poligono WHERE id = $3))
+            AND LOWER(a.municipio) = LOWER((SELECT municipio FROM colonia_poligono WHERE id = $3)))
            OR
            -- Opción B: lookup por coordenadas GPS vía ST_Contains
            ($3::uuid IS NULL
             AND $4::float IS NOT NULL
             AND $5::float IS NOT NULL
-            AND a.sector_id = (
-              SELECT cp.sector_id FROM colonia_poligono cp
+            AND LOWER(a.municipio) = LOWER((
+              SELECT cp.municipio FROM colonia_poligono cp
               WHERE ST_Contains(cp.geom, ST_SetSRID(ST_MakePoint($5, $4), 4326))
               LIMIT 1
-            ))
+            )))
            OR
-           -- Opción C: fallback por texto en colonia_sector
+           -- Opción C: fallback por nombre de colonia en colonia_poligono
            ($3::uuid IS NULL
             AND ($4::float IS NULL OR $5::float IS NULL)
-            AND EXISTS (
-              SELECT 1 FROM colonia_sector cs
-              WHERE cs.sector_id = a.sector_id
-                AND LOWER(cs.nombre_colonia) = LOWER($2)
-            ))
+            AND LOWER(a.municipio) = LOWER((
+              SELECT cp.municipio FROM colonia_poligono cp
+              WHERE LOWER(cp.nombre) = LOWER($2)
+              LIMIT 1
+            )))
          )
        ORDER BY a.carga_ponderada ASC, a.reportes_activos ASC
        LIMIT 1`,

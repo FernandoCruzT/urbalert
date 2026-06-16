@@ -205,8 +205,8 @@ export default function ReporteDetalle() {
                       <span style={S.val}>{reporte.autoridad.departamento || '—'}</span>
                     </div>
                     <div style={S.row}>
-                      <span style={S.lbl}>Sector</span>
-                      <span style={S.val}>{reporte.autoridad.sector_nombre || '—'}</span>
+                      <span style={S.lbl}>Municipio</span>
+                      <span style={S.val}>{reporte.autoridad.municipio || '—'}</span>
                     </div>
                     <div style={S.row}>
                       <span style={S.lbl}>Carga</span>

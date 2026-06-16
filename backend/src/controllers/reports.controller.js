@@ -358,21 +358,20 @@ async function getById(req, res) {
         reporte.ciudadano_id
       );
 
-      // Autoridad asignada (si existe), incluyendo sector
+      // Autoridad asignada (si existe)
       let autoridad = null;
       if (reporte.autoridad_id) {
         autoridad = await t.oneOrNone(
           `SELECT
              a.id,
              a.departamento,
+             a.municipio,
              a.carga_ponderada,
              u.nombre        AS nombre,
              u.apellido      AS apellido,
-             u.email         AS email,
-             s.nombre        AS sector_nombre
+             u.email         AS email
            FROM autoridad a
            JOIN usuario u ON u.id = a.usuario_id
-           JOIN sector  s ON s.id = a.sector_id
            WHERE a.id = $1`,
           reporte.autoridad_id
         );

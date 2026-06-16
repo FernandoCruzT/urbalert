@@ -54,10 +54,10 @@ function Field({ label, error, children }) {
 export default function NewProfile() {
   const [tipo,       setTipo]       = useState('autoridad');
   const [form,       setForm]       = useState({ nombre: '', apellido: '', email: '', telefono: '', password: '' });
-  const [authForm,   setAuthForm]   = useState({ categoria_id: '', sector_id: '', departamento: '' });
+  const [authForm,   setAuthForm]   = useState({ categoria_id: '', municipio: '', departamento: '' });
   const [showPwd,    setShowPwd]    = useState(false);
   const [categorias, setCategorias] = useState([]);
-  const [sectores,   setSectores]   = useState([]);
+  const MUNICIPIOS = ['Guadalajara', 'Zapopan', 'Tonalá', 'San Pedro Tlaquepaque'];
   const [errors,     setErrors]     = useState({});
   const [apiError,   setApiError]   = useState('');
   const [busy,       setBusy]       = useState(false);
@@ -65,7 +65,6 @@ export default function NewProfile() {
 
   useEffect(() => {
     api.get('/categories').then(({ data }) => setCategorias(data.categorias || [])).catch(() => {});
-    api.get('/users/sectors').then(({ data }) => setSectores(data.sectores || [])).catch(() => {});
   }, []);
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -89,7 +88,7 @@ export default function NewProfile() {
 
     if (tipo === 'autoridad') {
       if (!authForm.categoria_id) errs.categoria_id = 'Selecciona una categoría';
-      if (!authForm.sector_id)    errs.sector_id    = 'Selecciona un sector';
+      if (!authForm.municipio)    errs.municipio    = 'Selecciona un municipio';
     }
     return errs;
   }
@@ -111,7 +110,7 @@ export default function NewProfile() {
           telefono:     form.telefono.trim() || undefined,
           password:     form.password,
           categoria_id: authForm.categoria_id,
-          sector_id:    authForm.sector_id,
+          municipio:    authForm.municipio,
           departamento: authForm.departamento.trim() || undefined,
         });
         setCreado({
@@ -119,7 +118,7 @@ export default function NewProfile() {
           nombre:       `${data.usuario.nombre} ${data.usuario.apellido}`,
           email:        data.usuario.email,
           departamento: data.autoridad.departamento || '—',
-          sector:       sectores.find(s => s.id === authForm.sector_id)?.nombre || '—',
+          municipio:    authForm.municipio,
           categoria:    categorias.find(c => c.id === authForm.categoria_id)?.nombre || '—',
         });
       } else {
@@ -147,7 +146,7 @@ export default function NewProfile() {
   function handleNuevo() {
     setCreado(null);
     setForm({ nombre: '', apellido: '', email: '', telefono: '', password: '' });
-    setAuthForm({ categoria_id: '', sector_id: '', departamento: '' });
+    setAuthForm({ categoria_id: '', municipio: '', departamento: '' });
     setErrors({});
     setApiError('');
   }
@@ -169,9 +168,9 @@ export default function NewProfile() {
                 Tipo:        creado.tipo,
                 Nombre:      creado.nombre,
                 'E-mail':    creado.email,
-                ...(creado.categoria   ? { Categoría:   creado.categoria }   : {}),
+                ...(creado.categoria    ? { Categoría:    creado.categoria }    : {}),
+                ...(creado.municipio   ? { Municipio:    creado.municipio }   : {}),
                 ...(creado.departamento ? { Departamento: creado.departamento } : {}),
-                ...(creado.sector      ? { Sector:       creado.sector }      : {}),
               }).map(([k, v]) => (
                 <div key={k} style={S.sucRow}>
                   <span style={S.sucKey}>{k}</span>
@@ -270,11 +269,11 @@ export default function NewProfile() {
                     placeholder="Nombre del departamento (opcional)" />
                 </Field>
 
-                <Field label="Sector" error={errors.sector_id}>
-                  <select style={{ ...S.select, ...(errors.sector_id ? S.inputErr : {}) }}
-                    value={authForm.sector_id} onChange={e => setA('sector_id', e.target.value)}>
-                    <option value="">— Selecciona un sector —</option>
-                    {sectores.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                <Field label="Municipio" error={errors.municipio}>
+                  <select style={{ ...S.select, ...(errors.municipio ? S.inputErr : {}) }}
+                    value={authForm.municipio} onChange={e => setA('municipio', e.target.value)}>
+                    <option value="">— Selecciona un municipio —</option>
+                    {MUNICIPIOS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </Field>
               </div>

@@ -104,7 +104,7 @@ function FilterBarCiudadanos({ filter, onChange }) {
 const AUTORIDAD_COLS = [
   { key: 'todos',        label: 'Todos' },
   { key: 'categoria',    label: 'Categoría' },
-  { key: 'sector',       label: 'Sector' },
+  { key: 'municipio',    label: 'Municipio' },
   { key: 'departamento', label: 'Departamento' },
 ];
 
@@ -220,7 +220,7 @@ function TablaAutoridades({ rows, navigate, query }) {
               <th style={S.th}>E-mail</th>
               <th style={S.th}>Teléfono</th>
               <th style={S.th}>Categoría</th>
-              <th style={S.th}>Sector</th>
+              <th style={S.th}>Municipio</th>
               <th style={{ ...S.th, textAlign: 'center' }}>Reportes</th>
               <th style={{ ...S.th, textAlign: 'center' }}>Carga</th>
               <th style={S.th}>Departamento</th>
@@ -239,7 +239,7 @@ function TablaAutoridades({ rows, navigate, query }) {
                 <td style={S.td}>{highlightText(r.email, query)}</td>
                 <td style={S.td}>{r.telefono || <span style={{ color: 'var(--color-text-muted)' }}>—</span>}</td>
                 <td style={S.td}>{r.categoria_nombre || '—'}</td>
-                <td style={S.td}>{r.sector_nombre || '—'}</td>
+                <td style={S.td}>{r.municipio || '—'}</td>
                 <td style={{ ...S.td, textAlign: 'center' }}>{r.reportes_activos ?? 0}</td>
                 <td style={{ ...S.td, textAlign: 'center' }}>
                   {r.carga_ponderada != null ? Number(r.carga_ponderada).toFixed(1) : '—'}
@@ -294,7 +294,7 @@ export default function UserSearch() {
 
   // Valores únicos para el select del filtro de autoridades
   const autoridadFilterOptions = useMemo(() => {
-    const fieldMap = { categoria: 'categoria_nombre', sector: 'sector_nombre', departamento: 'departamento' };
+    const fieldMap = { categoria: 'categoria_nombre', municipio: 'municipio', departamento: 'departamento' };
     const field = fieldMap[autoridadFilterCol];
     if (!field) return [];
     return [...new Set(allAutoridades.map(r => r[field]).filter(Boolean))].sort();
@@ -320,7 +320,7 @@ export default function UserSearch() {
         r.email.toLowerCase().includes(q)
       );
       if (autoridadFilterCol !== 'todos' && autoridadFilterVal) {
-        const fieldMap = { categoria: 'categoria_nombre', sector: 'sector_nombre', departamento: 'departamento' };
+        const fieldMap = { categoria: 'categoria_nombre', municipio: 'municipio', departamento: 'departamento' };
         rows = rows.filter(r => r[fieldMap[autoridadFilterCol]] === autoridadFilterVal);
       }
       return rows;
