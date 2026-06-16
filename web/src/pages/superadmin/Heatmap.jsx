@@ -12,7 +12,7 @@ const CURRENT_MONTH = new Date().getMonth() + 1; // 1–12
 const MIN_YEAR      = 2026;
 const YEARS        = Array.from({ length: CURRENT_YEAR - MIN_YEAR + 1 }, (_, i) => MIN_YEAR + i);
 const MESES        = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const SECTORES     = ['Norte','Sur','Oriente','Poniente','Centro'];
+const MUNICIPIOS   = ['Guadalajara', 'Zapopan', 'Tonalá', 'San Pedro Tlaquepaque'];
 
 const STORAGE_KEY = 'heatmap_filters';
 function loadFilters() {
@@ -270,38 +270,38 @@ function Dropdown({ label, options, value, onChange, disabled }) {
 }
 
 /* ── applyStyles ──
-   sectorLookup: { colonia_nombre_lowercase → sector_nombre } cargado desde /api/heatmap/sectores.
-   Cuando activeSector está activo, la membresía se determina por sectorLookup (no por presencia
-   en el lookup de datos), por lo que colonias del sector sin reportes también reciben borde azul. */
-function applyStyles(dataLayer, lookup, metrica, activeSector, sectorLookup) {
+   municipioLookup: { colonia_nombre_lowercase → municipio_nombre } cargado desde /api/heatmap/municipios.
+   Cuando activeMunicipio está activo, la membresía se determina por municipioLookup (no por presencia
+   en el lookup de datos), por lo que colonias del municipio sin reportes también reciben borde azul. */
+function applyStyles(dataLayer, lookup, metrica, activeMunicipio, municipioLookup) {
   dataLayer.setStyle((feature) => {
-    const nombre   = feature.getProperty('nombre');
-    const key      = nombre?.toLowerCase().trim();
-    const data     = lookup[key];
-    const color    = coloniaColor(data, metrica);
-    const inSector = activeSector
-      ? (sectorLookup[key] === activeSector)
+    const nombre       = feature.getProperty('nombre');
+    const key          = nombre?.toLowerCase().trim();
+    const data         = lookup[key];
+    const color        = coloniaColor(data, metrica);
+    const inMunicipio  = activeMunicipio
+      ? (municipioLookup[key] === activeMunicipio)
       : true;
 
     if (!color) {
-      if (activeSector && inSector) {
-        // En el sector pero sin reportes en el periodo: borde azul, sin relleno
+      if (activeMunicipio && inMunicipio) {
+        // En el municipio pero sin reportes en el periodo: borde azul, sin relleno
         return { fillColor:'#888', fillOpacity:0.04, strokeColor:'#1F4E79', strokeWeight:2.5, strokeOpacity:0.45 };
       }
       return {
         fillColor:    '#888',
-        fillOpacity:  activeSector ? 0.02 : 0.04,
-        strokeColor:  activeSector ? '#ccc' : '#aaa',
-        strokeWeight: activeSector ? 0.3  : 0.6,
-        strokeOpacity:activeSector ? 0.2  : 0.4,
+        fillOpacity:  activeMunicipio ? 0.02 : 0.04,
+        strokeColor:  activeMunicipio ? '#ccc' : '#aaa',
+        strokeWeight: activeMunicipio ? 0.3  : 0.6,
+        strokeOpacity:activeMunicipio ? 0.2  : 0.4,
       };
     }
 
-    if (activeSector) {
-      if (inSector) {
+    if (activeMunicipio) {
+      if (inMunicipio) {
         return { fillColor:color.fill, fillOpacity:color.opacity, strokeColor:'#1F4E79', strokeWeight:2.5, strokeOpacity:1 };
       }
-      // Fuera del sector: color apagado
+      // Fuera del municipio: color apagado
       return { fillColor:color.fill, fillOpacity:0.18, strokeColor:'#bbb', strokeWeight:0.4, strokeOpacity:0.3 };
     }
 
@@ -310,7 +310,7 @@ function applyStyles(dataLayer, lookup, metrica, activeSector, sectorLookup) {
 }
 
 /* ── Mapa con choropleth por colonias ── */
-function ChoroplethMap({ coloniaData, metrica, sector, showBorders, sectorLookupRef, onColoniaClick }) {
+function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipioLookupRef, onColoniaClick }) {
   const mapRef            = useRef(null);
   const dataLayerRef      = useRef(null);
   const geojsonLoaded     = useRef(false);
@@ -338,7 +338,7 @@ function ChoroplethMap({ coloniaData, metrica, sector, showBorders, sectorLookup
 
     dataLayer.loadGeoJson('/colonias-zmg.geojson', {}, () => {
       geojsonLoaded.current = true;
-      applyStyles(dataLayer, lookup.current, metrica, null, sectorLookupRef.current);
+      applyStyles(dataLayer, lookup.current, metrica, null, municipioLookupRef.current);
     });
 
     dataLayer.addListener('mouseover', (event) => {
@@ -375,12 +375,12 @@ function ChoroplethMap({ coloniaData, metrica, sector, showBorders, sectorLookup
     });
   }, []);
 
-  /* Re-aplicar estilos cuando cambian datos, métrica, sector o visibilidad de límites */
+  /* Re-aplicar estilos cuando cambian datos, métrica, municipio o visibilidad de límites */
   useEffect(() => {
     if (dataLayerRef.current && geojsonLoaded.current) {
-      applyStyles(dataLayerRef.current, lookup.current, metrica, showBorders ? sector : null, sectorLookupRef.current);
+      applyStyles(dataLayerRef.current, lookup.current, metrica, showBorders ? municipio : null, municipioLookupRef.current);
     }
-  }, [coloniaData, metrica, sector, showBorders]);
+  }, [coloniaData, metrica, municipio, showBorders]);
 
   return (
     <div style={{ width:'100%', height:'100%', position:'relative' }}>
@@ -423,13 +423,13 @@ export default function SuperadminHeatmap() {
   const [subcategorias,   setSubcategorias]   = useState([]);
   const [subcategoriaId,  setSubcategoriaId]  = useState(() => loadFilters().subcategoriaId  ?? null);
   const [subcatNombre,    setSubcatNombre]    = useState(() => loadFilters().subcatNombre    ?? null);
-  const [sector,          setSector]          = useState(() => loadFilters().sector          ?? null);
+  const [municipio,       setMunicipio]       = useState(() => loadFilters().municipio       ?? null);
   const [estado,          setEstado]          = useState(() => loadFilters().estado          ?? 'todos');
   const [vista,           setVista]           = useState(() => loadFilters().vista           ?? 'periodo');
   const [metrica,         setMetrica]         = useState(() => loadFilters().metrica         ?? 'cantidad');
   const [coloniaData,     setColoniaData]     = useState([]);
   const [drawer, setDrawer] = useState({ open:false, colonia:null, reportes:[], loading:false, expandedId:null });
-  const sectorLookupRef = useRef({});
+  const municipioLookupRef = useRef({});
   const [toastMsg,              setToastMsg]              = useState('');
   const [showBorders,           setShowBorders]           = useState(false);
   const [coloniaModal,          setColoniaModal]          = useState(false);
@@ -450,13 +450,13 @@ export default function SuperadminHeatmap() {
   }, []);
 
   useEffect(() => {
-    api.get('/heatmap/sectores')
+    api.get('/heatmap/municipios')
       .then(({ data }) => {
         const normalized = {};
         Object.entries(data).forEach(([k, v]) => {
           normalized[k.toLowerCase().trim()] = v;
         });
-        sectorLookupRef.current = normalized;
+        municipioLookupRef.current = normalized;
       })
       .catch(() => {});
   }, []);
@@ -493,12 +493,12 @@ export default function SuperadminHeatmap() {
     }
     if (categoriaId)    params.categoria_id    = categoriaId;
     if (subcategoriaId) params.subcategoria_id = subcategoriaId;
-    if (sector)         params.sector_nombre   = sector;
+    if (municipio)      params.municipio_nombre = municipio;
 
     api.get('/heatmap', { params })
       .then(({ data }) => setColoniaData(data.colonias || []))
       .catch(() => setColoniaData([]));
-  }, [temporalidad, anio, mes, semana, categoriaId, subcategoriaId, sector, estado, vista, metrica]);
+  }, [temporalidad, anio, mes, semana, categoriaId, subcategoriaId, municipio, estado, vista, metrica]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -508,10 +508,10 @@ export default function SuperadminHeatmap() {
         temporalidad, anio, mes, semana,
         categoriaId, categoriaNombre,
         subcategoriaId, subcatNombre,
-        sector, estado, vista, metrica,
+        municipio, estado, vista, metrica,
       }));
     } catch {}
-  }, [temporalidad, anio, mes, semana, categoriaId, categoriaNombre, subcategoriaId, subcatNombre, sector, estado, vista, metrica]);
+  }, [temporalidad, anio, mes, semana, categoriaId, categoriaNombre, subcategoriaId, subcatNombre, municipio, estado, vista, metrica]);
 
   /* ── Toasts por interacción de filtros (no en montaje inicial) ── */
   useDidUpdateEffect(() => showToast(`Filtrando por ${temporalidad}`),                                        [temporalidad]);
@@ -519,9 +519,9 @@ export default function SuperadminHeatmap() {
   useDidUpdateEffect(() => showToast(`Mes: ${MESES[mes - 1]}`),                                               [mes]);
   useDidUpdateEffect(() => showToast(`Semana ${semana} — ${anio}`),                                           [semana]);
   useDidUpdateEffect(() => {
-    showToast(sector ? `Sector: ${sector}` : 'Mostrando toda la ZMG');
-    if (!sector) setShowBorders(false);
-  }, [sector]);
+    showToast(municipio ? `Municipio: ${municipio}` : 'Mostrando toda la ZMG');
+    if (!municipio) setShowBorders(false);
+  }, [municipio]);
   useDidUpdateEffect(() => showToast(`Reportes: ${estado}`),                                                  [estado]);
   useDidUpdateEffect(() => showToast(`Vista: ${vista}`),                                                      [vista]);
   useDidUpdateEffect(() => showToast(categoriaNombre ? `Categoría: ${categoriaNombre}` : 'Sin filtro de categoría'), [categoriaId]);
@@ -543,9 +543,9 @@ export default function SuperadminHeatmap() {
   }
 
   function openColoniaModal() {
-    if (!sector) return;
-    const list = Object.entries(sectorLookupRef.current)
-      .filter(([, s]) => s === sector)
+    if (!municipio) return;
+    const list = Object.entries(municipioLookupRef.current)
+      .filter(([, m]) => m === municipio)
       .map(([colonia]) => colonia.replace(/(?:^|\s|-)\S/g, c => c.toUpperCase()))
       .sort();
     setColoniaListForSector(list);
@@ -659,27 +659,27 @@ export default function SuperadminHeatmap() {
             </button>
           )}
 
-          {/* ── Sector ── */}
+          {/* ── Municipio ── */}
           <div style={S.filterGroup}>
-            <Dropdown label="Sector" options={SECTORES} value={sector} onChange={v => setSector(v)} />
-            {sector && (
-              <button style={S.clearBtn} onClick={() => setSector(null)} title="Limpiar sector">×</button>
+            <Dropdown label="Municipio" options={MUNICIPIOS} value={municipio} onChange={v => setMunicipio(v)} />
+            {municipio && (
+              <button style={S.clearBtn} onClick={() => setMunicipio(null)} title="Limpiar municipio">×</button>
             )}
-            <label style={S.toggleLabel(!sector)}>
+            <label style={S.toggleLabel(!municipio)}>
               <input
                 type="checkbox"
                 checked={showBorders}
                 onChange={e => setShowBorders(e.target.checked)}
-                disabled={!sector}
-                style={{ cursor: sector ? 'pointer' : 'not-allowed' }}
+                disabled={!municipio}
+                style={{ cursor: municipio ? 'pointer' : 'not-allowed' }}
               />
               Mostrar límites
             </label>
             <div style={S.infoBtnWrap}>
               <button
-                style={sector ? S.infoBtn : S.infoBtnDisabled}
+                style={municipio ? S.infoBtn : S.infoBtnDisabled}
                 onClick={openColoniaModal}
-                disabled={!sector}
+                disabled={!municipio}
                 onMouseEnter={() => setHoveredInfoBtn(true)}
                 onMouseLeave={() => setHoveredInfoBtn(false)}
               >
@@ -687,7 +687,7 @@ export default function SuperadminHeatmap() {
               </button>
               {hoveredInfoBtn && (
                 <div style={S.btnTooltip}>
-                  {sector ? 'Ver colonias del sector seleccionado' : 'Selecciona un sector primero'}
+                  {municipio ? 'Ver colonias del municipio seleccionado' : 'Selecciona un municipio primero'}
                 </div>
               )}
             </div>
@@ -720,9 +720,9 @@ export default function SuperadminHeatmap() {
             <ChoroplethMap
               coloniaData={coloniaData}
               metrica={metrica}
-              sector={sector}
+              municipio={municipio}
               showBorders={showBorders}
-              sectorLookupRef={sectorLookupRef}
+              municipioLookupRef={municipioLookupRef}
               onColoniaClick={handleColoniaClick}
             />
           ) : (
@@ -750,12 +750,12 @@ export default function SuperadminHeatmap() {
         <div style={S.modalOverlay} onClick={() => setColoniaModal(false)}>
           <div style={S.modalBox} onClick={e => e.stopPropagation()}>
             <div style={S.modalHeader}>
-              <span>Colonias · Sector {sector}</span>
+              <span>Colonias · {municipio}</span>
               <button style={S.drawerClose} onClick={() => setColoniaModal(false)}>✕</button>
             </div>
             <div style={S.modalBody}>
               {coloniaListForSector.length === 0
-                ? <div style={S.drawerEmpty}>Sin colonias registradas para este sector.</div>
+                ? <div style={S.drawerEmpty}>Sin colonias registradas para este municipio.</div>
                 : coloniaListForSector.map(c => (
                     <div key={c} style={S.coloniaItem}>{c}</div>
                   ))

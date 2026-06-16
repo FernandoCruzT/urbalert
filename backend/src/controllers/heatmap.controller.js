@@ -60,7 +60,7 @@ function buildDateRange(temporalidad, anio, mes, semana, vista = 'periodo') {
  *   semana         : number 1-52
  *   categoria_id   : uuid
  *   subcategoria_id: uuid
- *   sector_nombre  : string
+ *   municipio_nombre: string
  *   estado         : 'abiertos' | 'cerrados'
  *   metrica        : 'cantidad' | 'urgencia'
  *   mine           : boolean
@@ -73,7 +73,7 @@ async function heatmap(req, res) {
     semana                = null,
     categoria_id          = null,
     subcategoria          = null,
-    sector_nombre         = null,
+    municipio_nombre      = null,
     estado                = 'abiertos',
     metrica               = 'cantidad',
     vista                 = 'periodo',
@@ -141,12 +141,8 @@ async function heatmap(req, res) {
          AND ($1::uuid        IS NULL OR r.categoria_id = $1)
          AND ($2::text        IS NULL OR sub.nombre ILIKE $2)
          AND ($3::text IS NULL OR (
-           r.colonia_poligono_id IS NOT NULL AND EXISTS (
-             SELECT 1 FROM colonia_poligono cp_s
-             JOIN sector s ON s.id = cp_s.sector_id
-             WHERE cp_s.id = r.colonia_poligono_id
-               AND LOWER(s.nombre) = LOWER($3)
-           )
+           r.colonia_poligono_id IS NOT NULL
+           AND LOWER(cp.municipio) = LOWER($3)
          ))
          ${dateCondition}
          ${mineFilter}
@@ -156,7 +152,7 @@ async function heatmap(req, res) {
       [
         categoria_id || null,
         subcategoria || null,
-        sector_nombre || null,
+        municipio_nombre || null,
         inicio       || null,
         fin          || null,
         200,
@@ -187,8 +183,7 @@ async function heatmap(req, res) {
 
 /**
  * GET /api/heatmap/sectores
- * Devuelve un objeto { colonia_nombre: sector_nombre } para todas las colonias con sector asignado.
- * Usado por el frontend para resaltar colonias de un sector en el mapa choropleth.
+ * Mantenido por compatibilidad. Devuelve { colonia_nombre: sector_nombre }.
  */
 async function sectores(req, res) {
   try {
@@ -206,4 +201,25 @@ async function sectores(req, res) {
   }
 }
 
-module.exports = { heatmap, sectores };
+/**
+ * GET /api/heatmap/municipios
+ * Devuelve un objeto { colonia_nombre: municipio_nombre } para todas las colonias.
+ * Usado por el frontend para resaltar colonias de un municipio en el mapa choropleth.
+ */
+async function municipios(req, res) {
+  try {
+    const rows = await db.any(
+      `SELECT nombre AS colonia_nombre, municipio AS municipio_nombre
+       FROM colonia_poligono
+       WHERE municipio IS NOT NULL`
+    );
+    const map = {};
+    rows.forEach(r => { map[r.colonia_nombre] = r.municipio_nombre; });
+    return res.json(map);
+  } catch (err) {
+    console.error('[heatmap/municipios]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+module.exports = { heatmap, sectores, municipios };

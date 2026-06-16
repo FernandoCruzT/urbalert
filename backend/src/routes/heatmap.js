@@ -1,10 +1,11 @@
 const { Router } = require('express');
 const { authMiddleware } = require('../middlewares/auth');
-const { heatmap, sectores } = require('../controllers/heatmap.controller');
+const { heatmap, sectores, municipios } = require('../controllers/heatmap.controller');
 
 const router = Router();
 
-router.get('/sectores', authMiddleware, sectores);
-router.get('/',         authMiddleware, heatmap);
+router.get('/municipios', authMiddleware, municipios);
+router.get('/sectores',   authMiddleware, sectores);
+router.get('/',           authMiddleware, heatmap);
 
 module.exports = router;
