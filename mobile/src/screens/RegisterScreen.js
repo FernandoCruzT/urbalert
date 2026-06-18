@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
 
 const C = {
   primary: '#561C24', secondary: '#6D2932', accent: '#C7B7A3',
@@ -13,7 +12,6 @@ const C = {
 };
 
 export default function RegisterScreen({ navigation }) {
-  const { login, loginWithData } = useAuth();
 
   const [nombre,    setNombre]    = useState('');
   const [apellido,  setApellido]  = useState('');
@@ -57,18 +55,16 @@ export default function RegisterScreen({ navigation }) {
         password,
       });
 
-      // Si el backend devuelve token + usuario en el registro, usarlos directamente
-      const t = data?.token;
-      const u = data?.usuario ?? data?.user ?? null;
-
-      if (t && u) {
-        await loginWithData(t, u);
-      } else {
-        // El backend solo confirmó el registro — hacer login explícito
-        await login(email.trim().toLowerCase(), password);
-      }
+      // Navegar a verificación de correo antes de completar el login
+      navigation.navigate('VerifyEmail', {
+        email:    email.trim().toLowerCase(),
+        nombre:   nombre.trim(),
+        token:    data?.token ?? null,
+        userData: data?.usuario ?? data?.user ?? null,
+      });
     } catch (err) {
-      Alert.alert('Error al registrarse', err.message);
+      const msg = err?.response?.data?.message || err.message || 'Ocurrió un error al registrarse.';
+      Alert.alert('Error al registrarse', msg);
     } finally {
       setLoading(false);
     }

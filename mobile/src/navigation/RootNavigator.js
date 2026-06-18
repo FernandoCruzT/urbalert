@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import WelcomeScreen        from '../screens/WelcomeScreen';
 import LoginScreen          from '../screens/LoginScreen';
 import RegisterScreen       from '../screens/RegisterScreen';
+import VerifyEmailScreen    from '../screens/VerifyEmailScreen';
 
 // App screens
 import HomeScreen           from '../screens/HomeScreen';
@@ -57,9 +58,10 @@ export default function RootNavigator() {
       ) : (
         // ── Screens de auth ────────────────────────────────────────────────
         <>
-          <Stack.Screen name="Welcome"  component={WelcomeScreen} />
-          <Stack.Screen name="Login"    component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="Welcome"     component={WelcomeScreen} />
+          <Stack.Screen name="Login"       component={LoginScreen} />
+          <Stack.Screen name="Register"    component={RegisterScreen} />
+          <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
         </>
       )}
     </Stack.Navigator>
