@@ -98,7 +98,7 @@ async function queue(req, res) {
        LEFT JOIN autoridad    aut  ON aut.id   = r.autoridad_id
        LEFT JOIN usuario      ua   ON ua.id    = aut.usuario_id
        LEFT JOIN colonia_poligono cp ON cp.id  = r.colonia_poligono_id
-       LEFT JOIN sector           sec ON sec.id = cp.sector_id
+       LEFT JOIN sector           sec ON sec.id = cp.sector_id  -- legacy: usado en ReviewList y ReviewDetail del frontend
        LEFT JOIN foto_reporte     fp  ON fp.reporte_id = r.id
        WHERE r.estado = 'en_revision'
        ${tipoFilter}

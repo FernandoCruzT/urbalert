@@ -6,7 +6,7 @@ const { db } = require('../database/connection');
  *
  * @param {number} lat
  * @param {number} lng
- * @returns {Promise<{nombre, municipio, sector_id, colonia_poligono_id}|null>}
+ * @returns {Promise<{nombre, municipio, colonia_poligono_id}|null>}
  */
 async function getColoniaFromCoords(lat, lng) {
   if (lat == null || lng == null) return null;
@@ -16,8 +16,7 @@ async function getColoniaFromCoords(lat, lng) {
       `SELECT
          cp.id          AS colonia_poligono_id,
          cp.nombre,
-         cp.municipio,
-         cp.sector_id
+         cp.municipio
        FROM colonia_poligono cp
        WHERE ST_Contains(
          cp.geom,
@@ -36,7 +35,6 @@ async function getColoniaFromCoords(lat, lng) {
          cp.id          AS colonia_poligono_id,
          cp.nombre,
          cp.municipio,
-         cp.sector_id,
          ST_Distance(
            cp.geom::geography,
            ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography

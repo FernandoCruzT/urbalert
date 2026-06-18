@@ -49,15 +49,36 @@ function coloniaColor(colonia, metrica) {
   return              { fill: '#D32F2F', opacity: 0.75 };
 }
 
-function applyStyles(dataLayer, lookup, metrica) {
+function applyStyles(dataLayer, lookup, metrica, activeMunicipio, municipioLookup) {
   dataLayer.setStyle((feature) => {
-    const nombre = feature.getProperty('nombre');
-    const key    = nombre?.toLowerCase().trim();
-    const data   = lookup[key];
-    const color  = coloniaColor(data, metrica);
+    const nombre      = feature.getProperty('nombre');
+    const key         = nombre?.toLowerCase().trim();
+    const data        = lookup[key];
+    const color       = coloniaColor(data, metrica);
+    const inMunicipio = activeMunicipio
+      ? (municipioLookup[key] === activeMunicipio)
+      : true;
+
     if (!color) {
-      return { fillColor: '#888', fillOpacity: 0.04, strokeColor: '#aaa', strokeWeight: 0.6, strokeOpacity: 0.4 };
+      if (activeMunicipio && inMunicipio) {
+        return { fillColor: '#888', fillOpacity: 0.04, strokeColor: '#1F4E79', strokeWeight: 2.5, strokeOpacity: 0.45 };
+      }
+      return {
+        fillColor:    '#888',
+        fillOpacity:  activeMunicipio ? 0.02 : 0.04,
+        strokeColor:  activeMunicipio ? '#ccc' : '#aaa',
+        strokeWeight: activeMunicipio ? 0.3  : 0.6,
+        strokeOpacity:activeMunicipio ? 0.2  : 0.4,
+      };
     }
+
+    if (activeMunicipio) {
+      if (inMunicipio) {
+        return { fillColor: color.fill, fillOpacity: color.opacity, strokeColor: '#1F4E79', strokeWeight: 2.5, strokeOpacity: 1 };
+      }
+      return { fillColor: color.fill, fillOpacity: 0.18, strokeColor: '#bbb', strokeWeight: 0.4, strokeOpacity: 0.3 };
+    }
+
     return { fillColor: color.fill, fillOpacity: color.opacity, strokeColor: '#555', strokeWeight: 1, strokeOpacity: 0.7 };
   });
 }
@@ -95,6 +116,22 @@ const S = {
   reportSubcat:{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   reportDesc:  { fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '2px 0', lineHeight: 1.4 },
   reportDate:  { fontSize: '0.7rem', color: 'var(--color-text-muted)' },
+  municipioLabel: {
+    display: 'flex', alignItems: 'center', gap: '0.35rem',
+    padding: '0.38rem 0.75rem',
+    border: '1px solid var(--color-primary)',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: '0.82rem', fontWeight: 600,
+    color: 'var(--color-primary)',
+    background: 'var(--color-surface)',
+    whiteSpace: 'nowrap',
+  },
+  toggleLabel: (disabled) => ({
+    display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem',
+    color: disabled ? '#C0C0C0' : 'var(--color-text-muted)',
+    userSelect: 'none', cursor: disabled ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+    opacity: disabled ? 0.5 : 1,
+  }),
 };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -180,7 +217,7 @@ function Dropdown({ label, options, value, onChange }) {
 
 // ── ChoroplethMap ─────────────────────────────────────────────────────────────
 
-function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
+function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipioLookupRef, onColoniaClick }) {
   const mapRef            = useRef(null);
   const dataLayerRef      = useRef(null);
   const geojsonLoaded     = useRef(false);
@@ -202,7 +239,7 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
     dataLayerRef.current = dataLayer;
     dataLayer.loadGeoJson('/colonias-zmg.geojson', {}, () => {
       geojsonLoaded.current = true;
-      applyStyles(dataLayer, lookup.current, metrica);
+      applyStyles(dataLayer, lookup.current, metrica, null, municipioLookupRef.current);
     });
     dataLayer.addListener('mouseover', (event) => {
       const nombre = event.feature.getProperty('nombre');
@@ -231,8 +268,10 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
   }, []);
 
   useEffect(() => {
-    if (dataLayerRef.current && geojsonLoaded.current) applyStyles(dataLayerRef.current, lookup.current, metrica);
-  }, [coloniaData, metrica]);
+    if (dataLayerRef.current && geojsonLoaded.current) {
+      applyStyles(dataLayerRef.current, lookup.current, metrica, showBorders ? municipio : null, municipioLookupRef.current);
+    }
+  }, [coloniaData, metrica, municipio, showBorders]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -258,19 +297,22 @@ function ChoroplethMap({ coloniaData, metrica, onColoniaClick }) {
 
 export default function AuthorityHeatmap() {
   const navigate = useNavigate();
-  const [temporalidad,  setTemporalidad]  = useState('mes');
-  const [anio,          setAnio]          = useState(CURRENT_YEAR);
-  const [mes,           setMes]           = useState(CURRENT_MONTH);
-  const [semana,        setSemana]        = useState(1);
-  const [subcategorias, setSubcategorias] = useState([]);
-  const [subcatId,      setSubcatId]      = useState(null);
-  const [subcatNombre,  setSubcatNombre]  = useState(null);
-  const [estado,        setEstado]        = useState('abiertos');
-  const [vista,         setVista]         = useState('periodo');
-  const [metrica,       setMetrica]       = useState('cantidad');
-  const [coloniaData,   setColoniaData]   = useState([]);
-  const [drawer, setDrawer] = useState({ open:false, colonia:null, reportes:[], loading:false });
+  const [municipioPropio,  setMunicipioPropio]  = useState(null);
+  const [temporalidad,     setTemporalidad]     = useState('mes');
+  const [anio,             setAnio]             = useState(CURRENT_YEAR);
+  const [mes,              setMes]              = useState(CURRENT_MONTH);
+  const [semana,           setSemana]           = useState(1);
+  const [subcategorias,    setSubcategorias]    = useState([]);
+  const [subcatId,         setSubcatId]         = useState(null);
+  const [subcatNombre,     setSubcatNombre]     = useState(null);
+  const [estado,           setEstado]           = useState('abiertos');
+  const [vista,            setVista]            = useState('periodo');
+  const [metrica,          setMetrica]          = useState('cantidad');
+  const [coloniaData,      setColoniaData]      = useState([]);
+  const [showBorders,      setShowBorders]      = useState(false);
+  const [drawer, setDrawer] = useState({ open: false, colonia: null, reportes: [], loading: false });
   const [toastMsg, setToastMsg] = useState('');
+  const municipioLookupRef = useRef({});
 
   function showToast(msg) { setToastMsg(msg); }
 
@@ -279,6 +321,30 @@ export default function AuthorityHeatmap() {
     libraries: LIBRARIES,
   });
 
+  /* Cargar municipio propio de la autoridad autenticada */
+  useEffect(() => {
+    api.get('/auth/me')
+      .then(({ data }) => {
+        const m = data?.user?.perfil?.municipio;
+        if (m) setMunicipioPropio(m);
+      })
+      .catch(() => {});
+  }, []);
+
+  /* Cargar lookup colonia → municipio para el resaltado visual */
+  useEffect(() => {
+    api.get('/heatmap/municipios')
+      .then(({ data }) => {
+        const normalized = {};
+        Object.entries(data).forEach(([k, v]) => {
+          normalized[k.toLowerCase().trim()] = v;
+        });
+        municipioLookupRef.current = normalized;
+      })
+      .catch(() => {});
+  }, []);
+
+  /* Cargar subcategorías propias de la autoridad */
   useEffect(() => {
     api.get('/heatmap', { params: { mine: true } })
       .then(({ data }) => {
@@ -306,11 +372,12 @@ export default function AuthorityHeatmap() {
     const params = { mine: true, estado, metrica, vista, temporalidad, anio };
     if (temporalidad === 'mes')    params.mes    = mes;
     if (temporalidad === 'semana') params.semana = semana;
-    if (subcatId) params.subcategoria = subcatNombre;
+    if (subcatId)        params.subcategoria    = subcatNombre;
+    if (municipioPropio) params.municipio_nombre = municipioPropio;
     api.get('/heatmap', { params })
       .then(({ data }) => setColoniaData(data.colonias || []))
       .catch(() => setColoniaData([]));
-  }, [temporalidad, anio, mes, semana, subcatId, subcatNombre, estado, vista, metrica]);
+  }, [temporalidad, anio, mes, semana, subcatId, subcatNombre, estado, vista, metrica, municipioPropio]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -325,12 +392,12 @@ export default function AuthorityHeatmap() {
   useDidUpdateEffect(() => showToast(subcatNombre ? `Subcategoría: ${subcatNombre}` : 'Sin filtro de subcategoría'), [subcatId]);
 
   const handleColoniaClick = useCallback((nombre, municipio) => {
-    setDrawer({ open:true, colonia:nombre, municipio: municipio || null, reportes:[], loading:true });
+    setDrawer({ open: true, colonia: nombre, municipio: municipio || null, reportes: [], loading: true });
     const params = { colonia: nombre, estado, mine: true };
     if (municipio) params.municipio = municipio;
     api.get('/reports/by-colonia', { params })
-      .then(({ data }) => setDrawer(d => ({ ...d, loading:false, reportes: data.reportes || [] })))
-      .catch(() => setDrawer(d => ({ ...d, loading:false, reportes:[] })));
+      .then(({ data }) => setDrawer(d => ({ ...d, loading: false, reportes: data.reportes || [] })))
+      .catch(() => setDrawer(d => ({ ...d, loading: false, reportes: [] })));
   }, [estado]);
 
   const maxSemana = maxSemanaForAnio(anio);
@@ -415,11 +482,34 @@ export default function AuthorityHeatmap() {
           {/* ── Métrica ── */}
           <Dropdown label="Métrica" options={METRICA_OPTS} value={metrica} onChange={v => setMetrica(v)} />
 
+          {/* ── Municipio fijo + toggle límites ── */}
+          {municipioPropio && (
+            <div style={S.filterGroup}>
+              <span style={S.municipioLabel}>Municipio: {municipioPropio}</span>
+              <label style={S.toggleLabel(false)}>
+                <input
+                  type="checkbox"
+                  checked={showBorders}
+                  onChange={e => setShowBorders(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                Mostrar límites del municipio
+              </label>
+            </div>
+          )}
+
         </div>
 
         <div style={S.mapWrap}>
           {isLoaded
-            ? <ChoroplethMap coloniaData={coloniaData} metrica={metrica} onColoniaClick={handleColoniaClick} />
+            ? <ChoroplethMap
+                coloniaData={coloniaData}
+                metrica={metrica}
+                municipio={municipioPropio}
+                showBorders={showBorders}
+                municipioLookupRef={municipioLookupRef}
+                onColoniaClick={handleColoniaClick}
+              />
             : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-muted)' }}>Cargando mapa…</div>
           }
           {drawer.open && (
@@ -428,7 +518,7 @@ export default function AuthorityHeatmap() {
               municipio={drawer.municipio}
               reportes={drawer.reportes}
               loading={drawer.loading}
-              onClose={() => setDrawer(d => ({ ...d, open:false }))}
+              onClose={() => setDrawer(d => ({ ...d, open: false }))}
               onNavigate={(id) => navigate(`/authority/report/${id}`)}
             />
           )}

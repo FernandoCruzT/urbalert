@@ -1,10 +1,22 @@
 const { db } = require('../database/connection');
 
+const PAGE_SIZE = 30;
+
 /**
  * GET /api/notifications
- * Lista todas las notificaciones del usuario autenticado, más recientes primero.
+ * Lista las notificaciones del usuario autenticado, más recientes primero.
+ * Soporta paginación por cursor: ?before=<ISO timestamp> devuelve las
+ * notificaciones anteriores a ese momento. Devuelve máximo 30 por página.
+ * La respuesta incluye hasMore:true si existen más notificaciones.
  */
 async function list(req, res) {
+  const { before = null } = req.query;
+
+  const beforeDate = before ? new Date(before) : null;
+  if (before && isNaN(beforeDate?.getTime())) {
+    return res.status(400).json({ message: 'Parámetro before inválido — debe ser una fecha ISO válida' });
+  }
+
   try {
     const notificaciones = await db.any(
       `SELECT
@@ -31,11 +43,16 @@ async function list(req, res) {
        LEFT JOIN autoridad  a   ON a.id   = r.autoridad_id
        LEFT JOIN usuario    ua  ON ua.id  = a.usuario_id
        WHERE n.usuario_id = $1
-       ORDER BY n.leida ASC, n.created_at DESC`,
-      req.user.id
+         AND ($2::timestamptz IS NULL OR n.created_at < $2)
+       ORDER BY n.leida ASC, n.created_at DESC
+       LIMIT $3`,
+      [req.user.id, beforeDate, PAGE_SIZE + 1]
     );
 
-    return res.json({ notificaciones });
+    const hasMore = notificaciones.length > PAGE_SIZE;
+    if (hasMore) notificaciones.pop();
+
+    return res.json({ notificaciones, hasMore });
   } catch (err) {
     console.error('[notifications.list]', err);
     return res.status(500).json({ message: 'Error interno del servidor' });

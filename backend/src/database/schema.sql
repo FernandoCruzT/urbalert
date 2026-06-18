@@ -53,7 +53,7 @@ CREATE TABLE autoridad (
     id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     usuario_id        UUID        NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
     categoria_id      UUID        NOT NULL REFERENCES categoria(id),
-    sector_id         UUID        NOT NULL REFERENCES sector(id),
+    municipio         VARCHAR(100) NOT NULL,
     departamento      VARCHAR(150),
     carga_ponderada   INTEGER NOT NULL DEFAULT 0,
     reportes_activos  INTEGER NOT NULL DEFAULT 0
@@ -62,17 +62,6 @@ CREATE TABLE autoridad (
 CREATE TABLE superadmin (
     id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE
-);
-
--- =============================================================
--- COLONIA_SECTOR
--- =============================================================
-
-CREATE TABLE colonia_sector (
-    id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    sector_id      UUID        NOT NULL REFERENCES sector(id) ON DELETE CASCADE,
-    nombre_colonia VARCHAR(150) NOT NULL,
-    municipio      VARCHAR(100) NOT NULL
 );
 
 -- =============================================================

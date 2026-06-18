@@ -119,7 +119,8 @@ async function runAutoValidationJob() {
 }
 
 /**
- * Procesa todos los reportes en estado 'pendiente' e intenta asignarlos.
+ * Procesa los reportes en estado 'pendiente' en lotes de 5 para no saturar
+ * el pool de conexiones (10 por defecto en pg-promise).
  * Llamado por el cron y también exportado para tests o ejecución manual.
  */
 async function runAssignmentJob() {
@@ -129,23 +130,25 @@ async function runAssignmentJob() {
 
   if (pendientes.length === 0) return;
 
-  const resultados = await Promise.allSettled(
-    pendientes.map((r) => assignReport(r.id))
-  );
-
   let asignados  = 0;
   let sinAsignar = 0;
   let errores    = 0;
 
-  resultados.forEach((r, i) => {
-    if (r.status === 'fulfilled') {
-      if (r.value !== null) asignados++;
-      else                  sinAsignar++;
-    } else {
-      errores++;
-      console.error(`[assignment.job] Error en reporte ${pendientes[i].id}:`, r.reason?.message);
-    }
-  });
+  const BATCH = 5;
+  for (let i = 0; i < pendientes.length; i += BATCH) {
+    const lote = pendientes.slice(i, i + BATCH);
+    const resultados = await Promise.allSettled(lote.map((r) => assignReport(r.id)));
+
+    resultados.forEach((r, j) => {
+      if (r.status === 'fulfilled') {
+        if (r.value !== null) asignados++;
+        else                  sinAsignar++;
+      } else {
+        errores++;
+        console.error(`[assignment.job] Error en reporte ${lote[j].id}:`, r.reason?.message);
+      }
+    });
+  }
 
   console.log(
     `[assignment.job] ${new Date().toISOString()} — ` +
@@ -154,17 +157,27 @@ async function runAssignmentJob() {
   );
 }
 
+// Previene solapamiento entre ejecuciones del cron si el job tarda más de 2 min.
+let jobRunning = false;
+
 /**
  * Registra el job de asignación automática.
  * Corre cada 2 minutos.
  */
 function startAssignmentJob() {
   cron.schedule('*/2 * * * *', async () => {
+    if (jobRunning) {
+      console.warn('[assignment.job] Ejecución anterior aún activa — tick omitido');
+      return;
+    }
+    jobRunning = true;
     try {
       await runAutoValidationJob();
       await runAssignmentJob();
     } catch (err) {
       console.error('[assignment.job] Error inesperado:', err.message);
+    } finally {
+      jobRunning = false;
     }
   });
 
