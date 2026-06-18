@@ -3,6 +3,8 @@
  * Las mismas reglas se replican (manualmente sincronizadas) en web y mobile.
  */
 
+const dns = require('dns').promises;
+
 const PASSWORD_MIN_LENGTH = 8;
 
 // Letras latinas (incluyendo acentos, ñ, ü), espacios. 2-50 caracteres.
@@ -28,4 +30,19 @@ function isValidName(name) {
   return NAME_RE.test(String(name ?? '').trim());
 }
 
-module.exports = { isValidEmail, isValidPhone, isValidName, PASSWORD_MIN_LENGTH };
+/**
+ * Verifica que el dominio del email tiene al menos un registro MX.
+ * Devuelve false si el dominio no existe o no puede recibir correos.
+ */
+async function isValidEmailDomain(email) {
+  try {
+    const domain  = String(email ?? '').trim().split('@')[1];
+    if (!domain) return false;
+    const records = await dns.resolveMx(domain);
+    return Array.isArray(records) && records.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+module.exports = { isValidEmail, isValidPhone, isValidName, isValidEmailDomain, PASSWORD_MIN_LENGTH };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { FiUser, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 
@@ -60,8 +60,11 @@ export default function Login() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [showPwd,  setShowPwd]  = useState(false);
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const location  = useLocation();
   const { login } = useAuth();
+
+  const resetSuccess = location.state?.resetSuccess;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -110,6 +113,11 @@ export default function Login() {
 
           <h1 style={S.title}>Urbalert</h1>
 
+          {resetSuccess && (
+            <div style={{ ...S.error, backgroundColor: '#DCFCE7', border: '1px solid #86EFAC', color: '#166534' }}>
+              Contraseña actualizada correctamente. Inicia sesión con tu nueva contraseña.
+            </div>
+          )}
           {error && <div style={S.error}>{error}</div>}
 
           {/* Email */}
@@ -145,7 +153,7 @@ export default function Login() {
 
           {/* Forgot / Submit */}
           <div style={S.actionsRow}>
-            <a href="#" style={S.forgotLink}>¿Olvidaste tu contraseña?</a>
+            <Link to="/forgot-password" style={S.forgotLink}>¿Olvidaste tu contraseña?</Link>
             <button type="submit" style={S.submitBtn} disabled={loading}>
               {loading ? 'Entrando…' : 'Login'}
             </button>

@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { db }  = require('../database/connection');
 const { isValidEmail, isValidPhone, isValidName, PASSWORD_MIN_LENGTH } = require('../utils/validators');
+const { sendWelcomeAuthority } = require('../services/mail.service');
 
 // ─── createAuthority ─────────────────────────────────────────────────────────
 
@@ -61,6 +62,9 @@ async function createAuthority(req, res) {
 
       return { usuario, autoridad };
     });
+
+    sendWelcomeAuthority(result.usuario.email, result.usuario.nombre, password)
+      .catch(err => console.error('[mail] Error enviando bienvenida:', err.message));
 
     return res.status(201).json({
       message: 'Autoridad creada correctamente',

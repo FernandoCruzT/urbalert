@@ -1,7 +1,9 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { db } = require('../database/connection');
-const { isValidEmail, isValidPhone, isValidName, PASSWORD_MIN_LENGTH } = require('../utils/validators');
+const { isValidEmail, isValidPhone, isValidName, isValidEmailDomain, PASSWORD_MIN_LENGTH } = require('../utils/validators');
+const { sendPasswordReset, sendVerificationCode } = require('../services/mail.service');
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -79,6 +81,8 @@ async function register(req, res) {
     return res.status(400).json({ message: 'Apellido inválido: solo letras y espacios (2-50 caracteres)' });
   if (!isValidEmail(email))
     return res.status(400).json({ message: 'Formato de correo inválido' });
+  if (!await isValidEmailDomain(email))
+    return res.status(400).json({ message: 'El dominio de correo no existe o no puede recibir emails' });
   if (telefono?.trim() && !isValidPhone(telefono))
     return res.status(400).json({ message: 'El teléfono debe tener 10 dígitos' });
   if (password.length < PASSWORD_MIN_LENGTH)
@@ -121,7 +125,16 @@ async function register(req, res) {
         'INSERT INTO ciudadano (usuario_id) VALUES ($1) RETURNING id, estado_cuenta',
         usuario.id
       );
-      return { usuario, perfil: ciudadano, tipo: 'ciudadano' };
+
+      // Código de verificación de 6 dígitos, válido 15 min
+      const codigo       = Math.floor(100000 + Math.random() * 900000).toString();
+      const codigoExpiry = Date.now() + 900_000;
+      await t.none(
+        `UPDATE usuario SET email_codigo = $1, email_codigo_expiry = $2 WHERE id = $3`,
+        [codigo, codigoExpiry, usuario.id]
+      );
+
+      return { usuario, perfil: ciudadano, tipo: 'ciudadano', codigo };
     });
 
     if (result.tipo === 'superadmin') {
@@ -131,6 +144,10 @@ async function register(req, res) {
         superadmin: result.perfil,
       });
     }
+
+    // Enviar código de verificación por correo (no bloquea la respuesta)
+    sendVerificationCode(result.usuario.email, result.usuario.nombre, result.codigo)
+      .catch(err => console.error('[mail] Error enviando código de verificación:', err.message));
 
     // Respuesta ciudadano: incluye token para login inmediato
     const token = signToken({
@@ -291,4 +308,184 @@ async function changePassword(req, res) {
   }
 }
 
-module.exports = { register, login, me, changePassword };
+// ─── verifyEmail ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/verify-email
+ * Recibe { email, codigo } y marca email_verificado = true si el código es válido.
+ */
+async function verifyEmail(req, res) {
+  const { email, codigo } = req.body;
+
+  if (!email || !codigo) {
+    return res.status(400).json({ message: 'Faltan campos: email, codigo' });
+  }
+
+  try {
+    const usuario = await db.oneOrNone(
+      `SELECT id, email_codigo, email_codigo_expiry, email_verificado
+       FROM usuario WHERE email = $1`,
+      email.toLowerCase().trim()
+    );
+
+    if (!usuario) {
+      return res.status(400).json({ message: 'Código inválido o expirado' });
+    }
+    if (usuario.email_verificado) {
+      return res.json({ message: 'El correo ya estaba verificado' });
+    }
+    if (usuario.email_codigo !== String(codigo).trim()
+        || !usuario.email_codigo_expiry
+        || Date.now() > Number(usuario.email_codigo_expiry)) {
+      return res.status(400).json({ message: 'Código inválido o expirado' });
+    }
+
+    await db.none(
+      `UPDATE usuario
+       SET email_verificado    = TRUE,
+           email_codigo        = NULL,
+           email_codigo_expiry = NULL
+       WHERE id = $1`,
+      usuario.id
+    );
+
+    return res.json({ message: 'Correo verificado correctamente' });
+  } catch (err) {
+    console.error('[verifyEmail]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+// ─── resendVerification ───────────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/resend-verification
+ * Genera un nuevo código y lo reenvía si el correo aún no está verificado.
+ */
+async function resendVerification(req, res) {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'El campo email es obligatorio' });
+  }
+
+  try {
+    const usuario = await db.oneOrNone(
+      `SELECT id, nombre, email_verificado FROM usuario WHERE email = $1`,
+      email.toLowerCase().trim()
+    );
+
+    // Respuesta genérica si no existe el email (no revelar si está registrado)
+    if (!usuario || usuario.email_verificado) {
+      return res.json({ message: 'Si el correo está pendiente de verificación, recibirás un nuevo código' });
+    }
+
+    const codigo       = Math.floor(100000 + Math.random() * 900000).toString();
+    const codigoExpiry = Date.now() + 900_000;
+
+    await db.none(
+      `UPDATE usuario SET email_codigo = $1, email_codigo_expiry = $2 WHERE id = $3`,
+      [codigo, codigoExpiry, usuario.id]
+    );
+
+    sendVerificationCode(email.toLowerCase().trim(), usuario.nombre, codigo)
+      .catch(err => console.error('[mail] Error reenviando código:', err.message));
+
+    return res.json({ message: 'Si el correo está pendiente de verificación, recibirás un nuevo código' });
+  } catch (err) {
+    console.error('[resendVerification]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+// ─── forgotPassword ──────────────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/forgot-password
+ * Genera un token de reset y envía el correo de recuperación.
+ * Siempre responde 200 para no revelar si el email existe o no.
+ */
+async function forgotPassword(req, res) {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'El campo email es obligatorio' });
+  }
+
+  try {
+    const usuario = await db.oneOrNone(
+      `SELECT id, nombre FROM usuario WHERE email = $1`,
+      email.toLowerCase().trim()
+    );
+
+    if (usuario) {
+      const token   = crypto.randomBytes(32).toString('hex');
+      const expiry  = Date.now() + 3_600_000; // 1 hora en ms
+
+      await db.none(
+        `UPDATE usuario SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3`,
+        [token, expiry, usuario.id]
+      );
+
+      sendPasswordReset(email.toLowerCase().trim(), usuario.nombre, token)
+        .catch(err => console.error('[mail] Error enviando reset:', err.message));
+    }
+
+    // Respuesta genérica independientemente de si el email existe
+    return res.json({ message: 'Si el correo está registrado recibirás un enlace para restablecer tu contraseña' });
+  } catch (err) {
+    console.error('[forgotPassword]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+// ─── resetPassword ────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/reset-password
+ * Valida el token, hashea la nueva contraseña y limpia el token.
+ */
+async function resetPassword(req, res) {
+  const { token, nueva_password } = req.body;
+
+  if (!token || !nueva_password) {
+    return res.status(400).json({ message: 'Faltan campos: token, nueva_password' });
+  }
+  if (nueva_password.length < PASSWORD_MIN_LENGTH) {
+    return res.status(400).json({
+      message: `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres`,
+    });
+  }
+
+  try {
+    const usuario = await db.oneOrNone(
+      `SELECT id FROM usuario
+       WHERE reset_token = $1
+         AND reset_token_expiry > $2`,
+      [token, Date.now()]
+    );
+
+    if (!usuario) {
+      return res.status(400).json({ message: 'El enlace de recuperación es inválido o ya expiró' });
+    }
+
+    const password_hash = await bcrypt.hash(nueva_password, 12);
+
+    await db.none(
+      `UPDATE usuario
+       SET password_hash        = $1,
+           reset_token          = NULL,
+           reset_token_expiry   = NULL,
+           requiere_cambio_password = FALSE
+       WHERE id = $2`,
+      [password_hash, usuario.id]
+    );
+
+    return res.json({ message: 'Contraseña actualizada correctamente' });
+  } catch (err) {
+    console.error('[resetPassword]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+module.exports = { register, login, me, changePassword, forgotPassword, resetPassword, verifyEmail, resendVerification };

@@ -1,7 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import Login from './pages/Login';
+import Login          from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword  from './pages/ResetPassword';
 import ChangePassword from './pages/ChangePassword';
 import SuperadminHeatmap from './pages/superadmin/Heatmap';
 import NewProfile        from './pages/superadmin/NewProfile';
@@ -27,7 +29,9 @@ function App() {
       <Routes>
         {/* Público */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/login"           element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password"  element={<ResetPassword />} />
 
         {/* Cambio de contraseña — cualquier rol autenticado */}
         <Route
