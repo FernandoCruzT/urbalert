@@ -1,9 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Android emulator → 10.0.2.2 apunta al localhost del host
-// iOS simulator   → cambiar a http://localhost:4000/api
-const BASE_URL = 'http://192.168.100.229:4000/api';
+const BASE_URL = 'https://urbalert-backend-production.up.railway.app/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
