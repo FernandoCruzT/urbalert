@@ -1,8 +1,9 @@
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
+const express    = require('express');
+const cors       = require('cors');
+const helmet     = require('helmet');
+const morgan     = require('morgan');
+const rateLimit  = require('express-rate-limit');
 const { connectDB } = require('./database/connection');
 const { startAssignmentJob } = require('./jobs/assignment.job');
 const { startReminderJob }   = require('./jobs/reminder.job');
@@ -15,9 +16,16 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { message: 'Demasiados intentos, intenta en 15 minutos' },
+});
+
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // Routes
+app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/reports',    require('./routes/reports'));
 app.use('/api/validation', require('./routes/validation'));
