@@ -10,6 +10,12 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
+      },
+      "package": "com.fernandocruz19.urbalert"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "162ceb95-52a1-4665-8c30-26205cb3f903"
       }
     }
   }

@@ -1,15 +1,9 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM    = process.env.MAIL_FROM    || 'Urbalert <urbalert.app@gmail.com>';
-const FE_URL  = process.env.FRONTEND_URL || 'http://localhost:5173';
+const FROM   = process.env.MAIL_FROM   || 'Urbalert <onboarding@resend.dev>';
+const FE_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // ─── layout ──────────────────────────────────────────────────────────────────
 
@@ -97,9 +91,9 @@ async function sendVerificationEmail(to, nombre, token) {
     ${note('Este enlace expira en 24 horas. Si no creaste una cuenta en Urbalert, ignora este mensaje.')}
   `;
 
-  return transporter.sendMail({
+  return resend.emails.send({
     from:    FROM,
-    to,
+    to:      [to],
     subject: 'Verifica tu correo - Urbalert',
     html:    layout('Verificación de correo', body),
   });
@@ -124,9 +118,9 @@ async function sendPasswordReset(to, nombre, token) {
     ${note('Este enlace expira en 1 hora. Si no solicitaste este cambio, ignora este mensaje — tu contraseña no será modificada.')}
   `;
 
-  return transporter.sendMail({
+  return resend.emails.send({
     from:    FROM,
-    to,
+    to:      [to],
     subject: 'Recupera tu contraseña - Urbalert',
     html:    layout('Recuperación de contraseña', body),
   });
@@ -168,9 +162,9 @@ async function sendWelcomeAuthority(to, nombre, password_temporal) {
     ${note('Si tienes algún problema para acceder, contacta al administrador de Urbalert.')}
   `;
 
-  return transporter.sendMail({
+  return resend.emails.send({
     from:    FROM,
-    to,
+    to:      [to],
     subject: 'Bienvenido a Urbalert',
     html:    layout('Bienvenido a Urbalert', body),
   });
@@ -198,9 +192,9 @@ async function sendVerificationCode(to, nombre, codigo) {
     ${note('Este código expira en 15 minutos. Si no creaste una cuenta en Urbalert, ignora este mensaje.')}
   `;
 
-  return transporter.sendMail({
+  return resend.emails.send({
     from:    FROM,
-    to,
+    to:      [to],
     subject: 'Tu código de verificación - Urbalert',
     html:    layout('Verificación de correo', body),
   });
@@ -208,4 +202,4 @@ async function sendVerificationCode(to, nombre, codigo) {
 
 // ─── exports ──────────────────────────────────────────────────────────────────
 
-module.exports = { transporter, sendVerificationEmail, sendVerificationCode, sendPasswordReset, sendWelcomeAuthority };
+module.exports = { sendVerificationEmail, sendVerificationCode, sendPasswordReset, sendWelcomeAuthority };
