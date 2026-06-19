@@ -2,7 +2,7 @@ const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM   = process.env.MAIL_FROM   || 'Urbalert <onboarding@resend.dev>';
+const FROM   = process.env.MAIL_FROM   || 'Urbalert <noreply@urbalert.site>';
 const FE_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // ─── layout ──────────────────────────────────────────────────────────────────
