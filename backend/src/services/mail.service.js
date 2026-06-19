@@ -1,6 +1,8 @@
 const { Resend } = require('resend');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 const FROM   = process.env.MAIL_FROM   || 'Urbalert <noreply@urbalert.site>';
 const FE_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -91,7 +93,7 @@ async function sendVerificationEmail(to, nombre, token) {
     ${note('Este enlace expira en 24 horas. Si no creaste una cuenta en Urbalert, ignora este mensaje.')}
   `;
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from:    FROM,
     to:      [to],
     subject: 'Verifica tu correo - Urbalert',
@@ -118,7 +120,7 @@ async function sendPasswordReset(to, nombre, token) {
     ${note('Este enlace expira en 1 hora. Si no solicitaste este cambio, ignora este mensaje — tu contraseña no será modificada.')}
   `;
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from:    FROM,
     to:      [to],
     subject: 'Recupera tu contraseña - Urbalert',
@@ -162,7 +164,7 @@ async function sendWelcomeAuthority(to, nombre, password_temporal) {
     ${note('Si tienes algún problema para acceder, contacta al administrador de Urbalert.')}
   `;
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from:    FROM,
     to:      [to],
     subject: 'Bienvenido a Urbalert',
@@ -192,7 +194,7 @@ async function sendVerificationCode(to, nombre, codigo) {
     ${note('Este código expira en 15 minutos. Si no creaste una cuenta en Urbalert, ignora este mensaje.')}
   `;
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from:    FROM,
     to:      [to],
     subject: 'Tu código de verificación - Urbalert',
