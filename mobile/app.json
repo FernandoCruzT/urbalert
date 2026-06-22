@@ -11,7 +11,12 @@
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       },
-      "package": "com.fernandocruz19.urbalert"
+      "package": "com.fernandocruz19.urbalert",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyB9n_2_nNzEFFN03bemN7xvkDYbAYoUyQQ"
+        }
+      }
     },
     "extra": {
       "eas": {
