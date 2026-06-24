@@ -141,8 +141,9 @@ export default function ReportDetail() {
   const [notifs,    setNotifs]    = useState([]);
   const [notice,    setNotice]    = useState('');
   const [busy,      setBusy]      = useState(false);
-  const [modal,     setModal]     = useState(null); // 'cerrar' | 'escalar'
+  const [modal,     setModal]     = useState(null); // 'confirmar' | 'cerrar' | 'escalar'
   const [motivo,    setMotivo]    = useState('');
+  const [pendingEstado, setPendingEstado] = useState(null);
   const [lightbox,  setLightbox]  = useState(null);
 
   useEffect(() => {
@@ -339,8 +340,8 @@ export default function ReportDetail() {
                             style={S.semaBtn(isActive, s.color, s.bg, disabled)}
                             disabled={disabled || busy}
                             onClick={() => {
-                              if (s.key !== 'cerrado') { updateStatus(s.key); return; }
-                              if (reporte.estado === 'resuelto') { updateStatus('cerrado'); return; }
+                              if (s.key !== 'cerrado') { setPendingEstado(s.key); setModal('confirmar'); return; }
+                              if (reporte.estado === 'resuelto') { setPendingEstado('cerrado'); setModal('confirmar'); return; }
                               setMotivo(''); setModal('cerrar');
                             }}
                           >
@@ -392,6 +393,21 @@ export default function ReportDetail() {
           </div>
         </div>
       </div>
+
+      {/* Modal confirmar */}
+      {modal === 'confirmar' && (
+        <Modal title="Confirmar cambio" onClose={() => setModal(null)}>
+          <p style={{ fontSize: '0.88rem', color: 'var(--color-text)', marginBottom: '1.25rem' }}>
+            ¿Estás seguro de que deseas cambiar el estado a "{SEMAFORO.find(s => s.key === pendingEstado)?.label || pendingEstado}"?
+          </p>
+          <div style={S.modalRow}>
+            <button style={S.btnSecondary} onClick={() => setModal(null)}>Cancelar</button>
+            <button style={S.btnPrimary} onClick={() => updateStatus(pendingEstado)} disabled={busy}>
+              {busy ? 'Guardando…' : 'Confirmar'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Modal cerrar */}
       {modal === 'cerrar' && (
