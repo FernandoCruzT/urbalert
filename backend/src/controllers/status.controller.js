@@ -4,9 +4,10 @@ const { createNotification }  = require('../services/notification.service');
 const ESTADOS_PERMITIDOS = ['en_proceso', 'resuelto', 'cerrado'];
 
 // Transiciones válidas por estado de origen
+// en_proceso → en_proceso permite agregar una nota de actualización sin cambiar estado
 const TRANSICIONES = {
   asignado:   ['en_proceso', 'cerrado'],
-  en_proceso: ['resuelto',   'cerrado'],
+  en_proceso: ['en_proceso', 'resuelto', 'cerrado'],
   resuelto:   ['cerrado'],
 };
 
@@ -34,7 +35,7 @@ const NOTIFICACION = {
  */
 async function updateStatus(req, res) {
   const { id }          = req.params;
-  const { estado, motivo_cierre = null } = req.body;
+  const { estado, motivo_cierre = null, observacion: observacionBody = null } = req.body;
 
   // ── validación de entrada ─────────────────────────────────────────────────
   if (!estado || !ESTADOS_PERMITIDOS.includes(estado)) {
@@ -85,15 +86,18 @@ async function updateStatus(req, res) {
       }
 
       const estado_anterior = reporte.estado;
+      const esNotaActualizacion = estado === 'en_proceso' && estado_anterior === 'en_proceso';
 
       let observacion = null;
-      if (estado === 'cerrado') {
+      if (esNotaActualizacion) {
+        observacion = observacionBody?.trim() || null;
+      } else if (estado === 'cerrado') {
         observacion = estado_anterior === 'resuelto'
           ? 'Reporte cerrado por resolución'
           : (motivo_cierre?.trim() || null);
       }
 
-      // Actualizar estado del reporte (updated_at refleja el cambio)
+      // Actualizar updated_at siempre (aunque el estado no cambie, la nota sí)
       await t.none(
         `UPDATE reporte SET estado = $1, updated_at = NOW() WHERE id = $2`,
         [estado, id]
@@ -107,14 +111,16 @@ async function updateStatus(req, res) {
         [id, req.user.id, estado_anterior, estado, observacion]
       );
 
-      // Notificación al ciudadano
-      const notif = estado === 'cerrado'
-        ? NOTIFICACION.cerrado(motivo_cierre?.trim() || null)
-        : NOTIFICACION[estado];
+      // Notificación al ciudadano (omitir en notas de actualización sin cambio de estado)
+      if (!esNotaActualizacion) {
+        const notif = estado === 'cerrado'
+          ? NOTIFICACION.cerrado(motivo_cierre?.trim() || null)
+          : NOTIFICACION[estado];
 
-      await createNotification(
-        reporte.ciudadano_usuario_id, id, notif.titulo, notif.mensaje, t
-      );
+        await createNotification(
+          reporte.ciudadano_usuario_id, id, notif.titulo, notif.mensaje, t
+        );
+      }
     });
 
     return res.json({ message: `Estado actualizado a '${estado}'` });
