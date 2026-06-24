@@ -141,8 +141,9 @@ export default function ReportDetail() {
   const [notifs,    setNotifs]    = useState([]);
   const [notice,    setNotice]    = useState('');
   const [busy,      setBusy]      = useState(false);
-  const [modal,     setModal]     = useState(null); // 'confirmar' | 'cerrar' | 'escalar'
+  const [modal,     setModal]     = useState(null); // 'confirmar' | 'actualizar' | 'cerrar' | 'escalar'
   const [motivo,    setMotivo]    = useState('');
+  const [nota,      setNota]      = useState('');
   const [pendingEstado, setPendingEstado] = useState(null);
   const [lightbox,  setLightbox]  = useState(null);
 
@@ -197,8 +198,9 @@ export default function ReportDetail() {
 
   function canTransition(buttonKey, estado) {
     if (!estado || estado === 'cerrado') return false;
-    if (buttonKey === estado) return false;           // ya está en ese estado
-    if (buttonKey === 'cerrado') return true;         // siempre se puede cerrar si está activo
+    if (buttonKey === 'en_proceso' && estado === 'en_proceso') return true; // nota de actualización
+    if (buttonKey === estado) return false;
+    if (buttonKey === 'cerrado') return true;
     if (buttonKey === 'en_proceso') return estado === 'asignado';
     if (buttonKey === 'resuelto')   return estado === 'en_proceso';
     return false;
@@ -340,6 +342,7 @@ export default function ReportDetail() {
                             style={S.semaBtn(isActive, s.color, s.bg, disabled)}
                             disabled={disabled || busy}
                             onClick={() => {
+                              if (s.key === 'en_proceso' && reporte.estado === 'en_proceso') { setNota(''); setModal('actualizar'); return; }
                               if (s.key !== 'cerrado') { setPendingEstado(s.key); setModal('confirmar'); return; }
                               if (reporte.estado === 'resuelto') { setPendingEstado('cerrado'); setModal('confirmar'); return; }
                               setMotivo(''); setModal('cerrar');
@@ -393,6 +396,29 @@ export default function ReportDetail() {
           </div>
         </div>
       </div>
+
+      {/* Modal actualizar (nota en_proceso → en_proceso) */}
+      {modal === 'actualizar' && (
+        <Modal title="Agregar nota de actualización" onClose={() => setModal(null)}>
+          <textarea
+            style={S.modalTextarea}
+            placeholder="Nota de seguimiento (opcional)"
+            value={nota}
+            onChange={e => setNota(e.target.value)}
+            autoFocus
+          />
+          <div style={S.modalRow}>
+            <button style={S.btnSecondary} onClick={() => setModal(null)}>Cancelar</button>
+            <button
+              style={S.btnPrimary}
+              disabled={busy}
+              onClick={() => updateStatus('en_proceso', { observacion: nota.trim() || undefined })}
+            >
+              {busy ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Modal confirmar */}
       {modal === 'confirmar' && (
