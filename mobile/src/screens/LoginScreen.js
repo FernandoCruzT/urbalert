@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Alert,
@@ -21,6 +21,16 @@ export default function LoginScreen({ navigation }) {
   const [loading,  setLoading]  = useState(false);
   const [showPass, setShowPass] = useState(false);
 
+  useEffect(() => {
+    AsyncStorage.multiGet(['saved_email', 'saved_remember']).then(pairs => {
+      const saved = Object.fromEntries(pairs);
+      if (saved.saved_remember === 'true' && saved.saved_email) {
+        setEmail(saved.saved_email);
+        setRemember(true);
+      }
+    });
+  }, []);
+
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert('Campos requeridos', 'Ingresa tu email y contraseña.');
@@ -29,7 +39,11 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       await login(email.trim().toLowerCase(), password);
-      // La navegación la maneja el contexto/navigator (auth state change)
+      if (remember) {
+        await AsyncStorage.multiSet([['saved_email', email.trim().toLowerCase()], ['saved_remember', 'true']]);
+      } else {
+        await AsyncStorage.multiRemove(['saved_email', 'saved_remember']);
+      }
     } catch (err) {
       Alert.alert('Error al iniciar sesión', err.message);
     } finally {
