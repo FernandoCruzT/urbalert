@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 
 const C = {
@@ -17,19 +16,8 @@ export default function LoginScreen({ navigation }) {
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [showPass, setShowPass] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.multiGet(['saved_email', 'saved_remember']).then(pairs => {
-      const saved = Object.fromEntries(pairs);
-      if (saved.saved_remember === 'true' && saved.saved_email) {
-        setEmail(saved.saved_email);
-        setRemember(true);
-      }
-    });
-  }, []);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -39,11 +27,6 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       await login(email.trim().toLowerCase(), password);
-      if (remember) {
-        await AsyncStorage.multiSet([['saved_email', email.trim().toLowerCase()], ['saved_remember', 'true']]);
-      } else {
-        await AsyncStorage.multiRemove(['saved_email', 'saved_remember']);
-      }
     } catch (err) {
       Alert.alert('Error al iniciar sesión', err.message);
     } finally {
@@ -95,13 +78,6 @@ export default function LoginScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
             </View>
-
-            <TouchableOpacity style={s.rememberRow} onPress={() => setRemember(v => !v)}>
-              <View style={[s.checkbox, remember && s.checkboxOn]}>
-                {remember && <Text style={s.checkMark}>✓</Text>}
-              </View>
-              <Text style={s.rememberText}>Recordar mis datos</Text>
-            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
@@ -130,39 +106,31 @@ export default function LoginScreen({ navigation }) {
 }
 
 const s = StyleSheet.create({
-  safe:       { flex: 1, backgroundColor: C.background },
-  scroll:     { flexGrow: 1, padding: 24 },
-  back:       { marginBottom: 24 },
-  backText:   { color: C.secondary, fontSize: 15 },
-  title:      { fontSize: 28, fontWeight: '800', color: C.primary, marginBottom: 4 },
-  subtitle:   { fontSize: 15, color: '#6B7280', marginBottom: 32 },
-  form:       { gap: 16, marginBottom: 24 },
-  field:      { gap: 6 },
-  label:      { fontSize: 13, fontWeight: '600', color: C.primary },
+  safe:        { flex: 1, backgroundColor: C.background },
+  scroll:      { flexGrow: 1, padding: 24 },
+  back:        { marginBottom: 24 },
+  backText:    { color: C.secondary, fontSize: 15 },
+  title:       { fontSize: 28, fontWeight: '800', color: C.primary, marginBottom: 4 },
+  subtitle:    { fontSize: 15, color: '#6B7280', marginBottom: 32 },
+  form:        { gap: 16, marginBottom: 24 },
+  field:       { gap: 6 },
+  label:       { fontSize: 13, fontWeight: '600', color: C.primary },
   input: {
     backgroundColor: C.surface, borderWidth: 1, borderColor: '#E5E7EB',
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 15, color: '#111827',
   },
-  passwordRow:{ flexDirection: 'row', alignItems: 'center', gap: 8 },
-  eyeBtn:     { padding: 10 },
-  eyeText:    { fontSize: 18 },
-  rememberRow:{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
-  checkbox: {
-    width: 20, height: 20, borderRadius: 5, borderWidth: 2,
-    borderColor: C.secondary, alignItems: 'center', justifyContent: 'center',
-  },
-  checkboxOn: { backgroundColor: C.secondary, borderColor: C.secondary },
-  checkMark:  { color: '#fff', fontSize: 11, fontWeight: '700' },
-  rememberText:{ fontSize: 14, color: '#4B5563' },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  eyeBtn:      { padding: 10 },
+  eyeText:     { fontSize: 18 },
   btnLogin: {
     backgroundColor: C.primary, paddingVertical: 16,
     borderRadius: 12, alignItems: 'center',
     shadowColor: C.primary, shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 4 }, shadowRadius: 8, elevation: 4,
   },
-  btnLoginText:{ color: '#fff', fontSize: 16, fontWeight: '700' },
-  link:       { alignItems: 'center', marginTop: 20 },
-  linkText:   { fontSize: 14, color: '#6B7280' },
-  linkBold:   { color: C.secondary, fontWeight: '700' },
+  btnLoginText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  link:         { alignItems: 'center', marginTop: 20 },
+  linkText:     { fontSize: 14, color: '#6B7280' },
+  linkBold:     { color: C.secondary, fontWeight: '700' },
 });
