@@ -4,7 +4,7 @@ import {
   ScrollView, Alert, Animated, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Polygon } from 'react-native-maps';
+import MapView, { Polygon, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 
 import coloniasGeoJSON from '../../assets/colonias-zmg.json';
@@ -239,6 +239,7 @@ export default function HeatmapScreen({ navigation }) {
       <View style={s.mapContainer}>
         <MapView
           ref={mapRef}
+          provider={PROVIDER_GOOGLE}
           style={s.map}
           initialRegion={GDL}
           mapType="standard"
