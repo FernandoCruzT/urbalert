@@ -27,7 +27,11 @@ async function fetchProfile(t, usuario) {
     }
     case 'autoridad': {
       const perfil = await t.oneOrNone(
-        'SELECT id, departamento, municipio, carga_ponderada, reportes_activos FROM autoridad WHERE usuario_id = $1',
+        `SELECT a.id, a.departamento, a.municipio, a.carga_ponderada, a.reportes_activos,
+                a.categoria_id, c.nombre AS categoria_nombre
+         FROM autoridad a
+         LEFT JOIN categoria c ON c.id = a.categoria_id
+         WHERE a.usuario_id = $1`,
         usuario.id
       );
       if (!perfil) throw { status: 404, message: 'Perfil de autoridad no encontrado' };

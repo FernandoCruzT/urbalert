@@ -69,7 +69,11 @@ export default function ProfileScreen({ navigation }) {
     ]);
   };
 
-  const initials = `${user?.nombre?.[0] ?? ''}${user?.apellido?.[0] ?? ''}`.toUpperCase();
+  const initials  = `${user?.nombre?.[0] ?? ''}${user?.apellido?.[0] ?? ''}`.toUpperCase();
+  const esAutoridad = user?.role === 'autoridad' || user?.rol === 'autoridad';
+  const rolLabel    = esAutoridad ? 'Autoridad' : 'Ciudadano';
+  const rolBadgeStyle = esAutoridad ? s.roleBadgeAuth : s.roleBadge;
+  const rolTextStyle  = esAutoridad ? s.roleTextAuth  : s.roleText;
 
   return (
     <SafeAreaView style={s.safe}>
@@ -90,8 +94,8 @@ export default function ProfileScreen({ navigation }) {
               <Text style={s.avatarText}>{initials}</Text>
             </View>
             <Text style={s.fullName}>{user?.nombre} {user?.apellido}</Text>
-            <View style={s.roleBadge}>
-              <Text style={s.roleText}>Ciudadano</Text>
+            <View style={rolBadgeStyle}>
+              <Text style={rolTextStyle}>{rolLabel}</Text>
             </View>
           </View>
 
@@ -101,6 +105,17 @@ export default function ProfileScreen({ navigation }) {
             <InfoRow icon="👤" label="Nombre"   value={`${user?.nombre ?? ''} ${user?.apellido ?? ''}`.trim()} />
             <InfoRow icon="✉️" label="Email"    value={user?.email} />
             <InfoRow icon="📱" label="Teléfono" value={user?.telefono} />
+            {esAutoridad ? (
+              <>
+                <InfoRow icon="🏛️" label="Municipio"  value={user?.perfil?.municipio} />
+                <InfoRow icon="🗂️" label="Categoría"  value={user?.perfil?.categoria_nombre} />
+                {user?.perfil?.departamento ? (
+                  <InfoRow icon="🏢" label="Departamento" value={user?.perfil?.departamento} />
+                ) : null}
+              </>
+            ) : (
+              <InfoRow icon="📍" label="Zona de cobertura" value="Zona Metropolitana de Guadalajara" />
+            )}
           </View>
 
           {/* Cambiar contraseña */}
@@ -184,8 +199,10 @@ const s = StyleSheet.create({
   },
   avatarText:   { fontSize: 28, fontWeight: '700', color: '#fff' },
   fullName:     { fontSize: 20, fontWeight: '700', color: C.primary, marginBottom: 6 },
-  roleBadge:    { backgroundColor: '#DBEAFE', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 },
-  roleText:     { fontSize: 12, fontWeight: '600', color: '#1E40AF' },
+  roleBadge:     { backgroundColor: '#DBEAFE', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 },
+  roleText:      { fontSize: 12, fontWeight: '600', color: '#1E40AF' },
+  roleBadgeAuth: { backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 3, borderRadius: 20 },
+  roleTextAuth:  { fontSize: 12, fontWeight: '600', color: '#92400E' },
   card:         { backgroundColor: C.surface, borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB' },
   cardTitle:    { fontSize: 13, fontWeight: '700', color: '#6B7280', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   infoRow:      { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
