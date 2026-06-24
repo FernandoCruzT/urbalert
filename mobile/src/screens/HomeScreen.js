@@ -238,7 +238,7 @@ export default function HomeScreen({ navigation }) {
           <Text style={s.heroBtnIcon}>🔔</Text>
           {unreadCount > 0 && (
             <View style={s.badge}>
-              <Text style={s.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              <Text style={s.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -267,11 +267,11 @@ const s = StyleSheet.create({
                  backgroundColor: 'rgba(255,255,255,0.18)',
                  alignItems: 'center', justifyContent: 'center' },
   heroBtnIcon: { fontSize: 18 },
-  badge:       { position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17,
-                 borderRadius: 9, backgroundColor: C.accent, alignItems: 'center',
+  badge:       { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16,
+                 borderRadius: 8, backgroundColor: '#DC2626', alignItems: 'center',
                  justifyContent: 'center', paddingHorizontal: 3,
                  borderWidth: 1.5, borderColor: C.primary },
-  badgeText:   { color: C.primary, fontSize: 9, fontWeight: '800' },
+  badgeText:   { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
   accentBar:   { height: 3, width: 48, backgroundColor: C.accent,
                  borderRadius: 2, marginLeft: 20, marginTop: 12 },
   greeting:    { fontSize: 26, fontWeight: '800', color: '#FFFFFF' },
