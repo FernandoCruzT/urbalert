@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, ScrollView, ImageBackground,
+  Animated, Easing, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -23,6 +24,9 @@ const CITY_IMG = { uri: 'https://images.unsplash.com/photo-1477959858617-67f85cf
 // ── MiniCalendar ──────────────────────────────────────────────────────────────
 
 function MiniCalendar({ allReportDates }) {
+  const { width: screenW } = useWindowDimensions();
+  const CAL_W = screenW - 40 - 32; // contentSurface padding (20×2) + card padding (16×2)
+
   const now        = new Date();
   const todayYear  = now.getFullYear();
   const todayMonth = now.getMonth();
@@ -30,6 +34,9 @@ function MiniCalendar({ allReportDates }) {
 
   const [viewYear,  setViewYear]  = useState(todayYear);
   const [viewMonth, setViewMonth] = useState(todayMonth);
+
+  const slideAnim  = useRef(new Animated.Value(0)).current;
+  const animating  = useRef(false);
 
   const firstDay    = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -40,14 +47,37 @@ function MiniCalendar({ allReportDates }) {
       .map(d => d.getDate())
   );
 
-  const prevMonth = () => {
+  // direction: -1 = prev (slide right), 1 = next (slide left)
+  function animateSlide(direction, changeFn) {
+    if (animating.current) return;
+    animating.current = true;
+
+    Animated.timing(slideAnim, {
+      toValue: direction * -CAL_W,
+      duration: 250,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      changeFn();
+      slideAnim.setValue(direction * CAL_W);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 250,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start(() => { animating.current = false; });
+    });
+  }
+
+  const prevMonth = () => animateSlide(-1, () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
     else setViewMonth(m => m - 1);
-  };
-  const nextMonth = () => {
+  });
+
+  const nextMonth = () => animateSlide(1, () => {
     if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
     else setViewMonth(m => m + 1);
-  };
+  });
 
   const cells = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
@@ -67,26 +97,28 @@ function MiniCalendar({ allReportDates }) {
         </TouchableOpacity>
       </View>
 
-      <View style={cal.grid}>
-        {DAYS_SHORT.map(d => (
-          <Text key={d} style={cal.dayLabel}>{d}</Text>
-        ))}
-        {cells.map((day, i) => {
-          const isToday   = isCurrentMonth && day === todayDate;
-          const hasReport = day !== null && reportDays.has(day);
-          return (
-            <View key={i} style={cal.cell}>
-              {day !== null && (
-                <>
-                  <View style={[cal.dayCircle, isToday && cal.todayCircle]}>
-                    <Text style={[cal.dayNum, isToday && cal.todayNum]}>{day}</Text>
-                  </View>
-                  {hasReport && <View style={cal.dot} />}
-                </>
-              )}
-            </View>
-          );
-        })}
+      <View style={cal.gridClip}>
+        <Animated.View style={[cal.grid, { transform: [{ translateX: slideAnim }] }]}>
+          {DAYS_SHORT.map(d => (
+            <Text key={d} style={cal.dayLabel}>{d}</Text>
+          ))}
+          {cells.map((day, i) => {
+            const isToday   = isCurrentMonth && day === todayDate;
+            const hasReport = day !== null && reportDays.has(day);
+            return (
+              <View key={i} style={cal.cell}>
+                {day !== null && (
+                  <>
+                    <View style={[cal.dayCircle, isToday && cal.todayCircle]}>
+                      <Text style={[cal.dayNum, isToday && cal.todayNum]}>{day}</Text>
+                    </View>
+                    {hasReport && <View style={cal.dot} />}
+                  </>
+                )}
+              </View>
+            );
+          })}
+        </Animated.View>
       </View>
     </View>
   );
@@ -272,6 +304,7 @@ const cal = StyleSheet.create({
   navBtn:      { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#F3F4F6' },
   navArrow:    { fontSize: 22, color: C.primary, fontWeight: '600', lineHeight: 26 },
   header:      { fontSize: 15, fontWeight: '700', color: C.primary },
+  gridClip:    { overflow: 'hidden' },
   grid:        { flexDirection: 'row', flexWrap: 'wrap' },
   dayLabel:    { width: '14.28%', textAlign: 'center', fontSize: 11, color: '#9CA3AF', fontWeight: '600', paddingVertical: 4 },
   cell:        { width: '14.28%', alignItems: 'center', paddingVertical: 3, minHeight: 38 },
