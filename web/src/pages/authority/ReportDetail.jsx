@@ -393,6 +393,42 @@ export default function ReportDetail() {
                 </button>
               </div>
             )}
+
+            {/* Historial de cambios */}
+            {reporte?.historial?.length > 0 && (
+              <div style={S.section}>
+                <div style={S.secTitle}>Historial de cambios</div>
+                {reporte.historial.map((h, i) => (
+                  <div key={h.id || i} style={{
+                    display: 'flex', gap: '0.75rem',
+                    paddingBottom: i < reporte.historial.length - 1 ? '0.65rem' : 0,
+                    borderBottom: i < reporte.historial.length - 1 ? '1px solid #F3F4F6' : 'none',
+                    marginBottom: i < reporte.historial.length - 1 ? '0.65rem' : 0,
+                  }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap', minWidth: 110, paddingTop: 2 }}>
+                      {fmtDate(h.created_at)}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--color-text)' }}>
+                        <span style={{ textTransform: 'capitalize' }}>{h.estado_anterior?.replace('_', ' ')}</span>
+                        {' → '}
+                        <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{h.estado_nuevo?.replace('_', ' ')}</span>
+                      </div>
+                      {h.observacion && (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 2, fontStyle: 'italic' }}>
+                          {h.observacion}
+                        </div>
+                      )}
+                      {(h.usuario_nombre || h.rol_usuario) && (
+                        <div style={{ fontSize: '0.72rem', color: '#9CA3AF', marginTop: 2 }}>
+                          {h.usuario_nombre ? `${h.usuario_nombre} ${h.usuario_apellido || ''}` : h.rol_usuario}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

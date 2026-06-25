@@ -53,8 +53,15 @@ function LifecycleTracker({ estadoActual, historial }) {
         const current = idx === currentIdx;
         const pending = idx > currentIdx;
 
-        // Buscar entrada del historial para este estado
-        const histEntry = historial?.find(h => h.estado_nuevo === estado);
+        // Para en_proceso recolectar TODAS las entradas (transición + notas de actualización)
+        const todasEnProceso = estado === 'en_proceso'
+          ? (historial?.filter(h => h.estado_nuevo === 'en_proceso') ?? [])
+          : [];
+        const histEntry = estado === 'en_proceso'
+          ? (todasEnProceso[0] ?? null)
+          : (historial?.find(h => h.estado_nuevo === estado) ?? null);
+        const notasExtra = todasEnProceso.slice(1);
+
         const date = histEntry ? fmtHistDate(new Date(histEntry.created_at)) : null;
 
         return (
@@ -79,6 +86,13 @@ function LifecycleTracker({ estadoActual, historial }) {
               {histEntry?.observacion && (
                 <Text style={lc.obs}>{histEntry.observacion}</Text>
               )}
+              {/* Sub-items: notas de actualización (en_proceso → en_proceso) */}
+              {notasExtra.map((nota, i) => (
+                <View key={i} style={lc.notaWrap}>
+                  <Text style={lc.notaDate}>{fmtHistDate(new Date(nota.created_at))}</Text>
+                  <Text style={lc.notaObs}>{nota.observacion || 'Actualización sin nota'}</Text>
+                </View>
+              ))}
             </View>
           </View>
         );
@@ -245,4 +259,7 @@ const lc = StyleSheet.create({
   labelCurrent: { color: C.accent, fontWeight: '700', fontSize: 14 },
   date:         { fontSize: 11, color: '#6B7280', marginTop: 2 },
   obs:          { fontSize: 11, color: '#9CA3AF', marginTop: 2, fontStyle: 'italic' },
+  notaWrap:     { marginTop: 8, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+  notaDate:     { fontSize: 10, color: '#9CA3AF', marginBottom: 2 },
+  notaObs:      { fontSize: 11, color: '#6B7280', fontStyle: 'italic' },
 });

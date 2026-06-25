@@ -111,12 +111,17 @@ async function updateStatus(req, res) {
         [id, req.user.id, estado_anterior, estado, observacion]
       );
 
-      // Notificación al ciudadano (omitir en notas de actualización sin cambio de estado)
-      if (!esNotaActualizacion) {
+      // Notificación al ciudadano
+      if (esNotaActualizacion) {
+        const mensajeNota = observacion || 'La autoridad ha actualizado el estado de tu reporte';
+        await createNotification(
+          reporte.ciudadano_usuario_id, id,
+          'Actualización de tu reporte', mensajeNota, t
+        );
+      } else {
         const notif = estado === 'cerrado'
           ? NOTIFICACION.cerrado(motivo_cierre?.trim() || null)
           : NOTIFICACION[estado];
-
         await createNotification(
           reporte.ciudadano_usuario_id, id, notif.titulo, notif.mensaje, t
         );
