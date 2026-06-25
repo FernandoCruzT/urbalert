@@ -58,6 +58,14 @@ export default function AuthorityProfile() {
               <div style={S.value}>{user?.rol || '—'}</div>
             </div>
             <div>
+              <div style={S.label}>Municipio</div>
+              <div style={S.value}>{user?.perfil?.municipio || '—'}</div>
+            </div>
+            <div>
+              <div style={S.label}>Categoría</div>
+              <div style={S.value}>{user?.perfil?.categoria_nombre || '—'}</div>
+            </div>
+            <div>
               <div style={S.label}>Registro</div>
               <div style={S.value}>{fmtDate(user?.created_at)}</div>
             </div>

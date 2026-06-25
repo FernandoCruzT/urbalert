@@ -6,13 +6,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 
+const WEB_URL = 'urbalert-web.vercel.app';
+
 const C = {
   primary: '#561C24', secondary: '#6D2932', accent: '#C7B7A3',
   background: '#E8D8C4', surface: '#FFFFFF',
 };
 
 export default function LoginScreen({ navigation }) {
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +28,14 @@ export default function LoginScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password);
+      const u = await login(email.trim().toLowerCase(), password);
+      if (u?.role !== 'ciudadano' && u?.rol !== 'ciudadano') {
+        await logout();
+        Alert.alert(
+          'Acceso no permitido',
+          `Esta aplicación es exclusiva para ciudadanos. El panel de autoridades y administradores se accede desde el navegador web en ${WEB_URL}`
+        );
+      }
     } catch (err) {
       Alert.alert('Error al iniciar sesión', err.message);
     } finally {
