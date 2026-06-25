@@ -59,11 +59,14 @@ async function escalate(req, res) {
         `SELECT r.id, r.estado, r.autoridad_id, r.colonia,
                 cat.nombre AS categoria_nombre,
                 u.nombre   AS autoridad_nombre,
-                u.apellido AS autoridad_apellido
+                u.apellido AS autoridad_apellido,
+                uc.id      AS ciudadano_usuario_id
          FROM reporte r
          JOIN categoria cat ON cat.id = r.categoria_id
          JOIN autoridad a   ON a.id   = r.autoridad_id
          JOIN usuario u     ON u.id   = a.usuario_id
+         JOIN ciudadano c   ON c.id   = r.ciudadano_id
+         JOIN usuario uc    ON uc.id  = c.usuario_id
          WHERE r.id = $1`,
         reportId
       );
@@ -98,6 +101,15 @@ async function escalate(req, res) {
            (reporte_id, usuario_id, rol_usuario, estado_anterior, estado_nuevo, observacion)
          VALUES ($1, $2, 'autoridad', $3, 'en_revision', $4)`,
         [reportId, req.user.id, estado_anterior, motivo.trim()]
+      );
+
+      // Notificar al ciudadano
+      await createNotification(
+        reporte.ciudadano_usuario_id,
+        reportId,
+        'Reporte escalado',
+        'Tu reporte ha sido escalado para su reasignación.',
+        t
       );
 
       // Notificar a todos los superadmins
