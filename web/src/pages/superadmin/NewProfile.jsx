@@ -58,6 +58,17 @@ export default function NewProfile() {
   const [showPwd,    setShowPwd]    = useState(false);
   const [categorias, setCategorias] = useState([]);
   const MUNICIPIOS = ['Guadalajara', 'Zapopan', 'Tonalá', 'San Pedro Tlaquepaque'];
+  const DEPARTAMENTOS = [
+    'Seguridad y orden público',
+    'Obras públicas y vialidad',
+    'Servicios públicos y limpieza',
+    'Alumbrado y energía',
+    'Agua y saneamiento',
+    'Parques y espacios públicos',
+    'Transporte y movilidad urbana',
+    'Protección civil y emergencias',
+    'Medio ambiente y ecología',
+  ];
   const [errors,     setErrors]     = useState({});
   const [apiError,   setApiError]   = useState('');
   const [busy,       setBusy]       = useState(false);
@@ -264,9 +275,11 @@ export default function NewProfile() {
                 </Field>
 
                 <Field label="Departamento">
-                  <input style={S.input} value={authForm.departamento}
-                    onChange={e => setA('departamento', e.target.value)}
-                    placeholder="Nombre del departamento (opcional)" />
+                  <select style={S.select} value={authForm.departamento}
+                    onChange={e => setA('departamento', e.target.value)}>
+                    <option value="">— Departamento (opcional) —</option>
+                    {DEPARTAMENTOS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
                 </Field>
 
                 <Field label="Municipio" error={errors.municipio}>
