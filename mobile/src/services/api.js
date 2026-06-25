@@ -16,15 +16,15 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Normaliza errores del servidor
+// Normaliza errores del servidor y preserva el body de la respuesta en error.data
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    const message =
-      err.response?.data?.message ||
-      err.message ||
-      'Error de conexión';
-    return Promise.reject(new Error(message));
+    const serverData = err.response?.data;
+    const message = serverData?.message || err.message || 'Error de conexión';
+    const error = new Error(message);
+    if (serverData) error.data = serverData;
+    return Promise.reject(error);
   }
 );
 

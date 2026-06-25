@@ -143,28 +143,48 @@ export default function NewReportStep3Screen({ navigation, route }) {
 
       navigation.replace('ReportSuccess', { reporteId });
     } catch (err) {
-      if (err.message?.includes('duplicado')) {
-        Alert.alert('Posible duplicado', 'Ya existe un reporte similar cerca. ¿Continuar de todas formas?', [
-          { text: 'Cancelar' },
-          {
-            text: 'Continuar', onPress: async () => {
-              try {
-                const body = {
-                  categoria_id: categoriaId, subcategoria_id: subcategoriaId,
-                  descripcion: descripcion.trim(),
-                  latitud: location?.latitud, longitud: location?.longitud,
-                  precision_gps: location?.precision, colonia: colonia.trim() || undefined,
-                  calle: calle || undefined, numero: numero || undefined,
-                  omitir_duplicado: true,
-                };
-                const { data } = await api.post('/reports', body);
-                navigation.replace('ReportSuccess', { reporteId: data.reporte.id });
-              } catch (e2) {
-                Alert.alert('Error', e2.message);
-              }
-            }
-          },
-        ]);
+      const duplicado = err.data?.duplicado;
+      if (duplicado) {
+        const desc  = duplicado.descripcion?.length > 100
+          ? duplicado.descripcion.slice(0, 100) + '…'
+          : (duplicado.descripcion ?? '');
+        const dist  = Math.round(duplicado.distancia_metros ?? 0);
+        const fecha = new Date(duplicado.created_at).toLocaleDateString('es-MX', {
+          day: '2-digit', month: 'short', year: 'numeric',
+        });
+        Alert.alert(
+          'Reporte similar encontrado',
+          `Ya existe un reporte similar a ${dist} metros:\n"${desc}"\n\nRegistrado el ${fecha}.\n\n¿Deseas confirmar ese reporte o crear uno nuevo?`,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Confirmar reporte existente',
+              onPress: () => {
+                Alert.alert('Gracias', 'Tu apoyo ayuda a priorizar la atención del reporte existente.');
+                navigation.goBack();
+              },
+            },
+            {
+              text: 'Crear de todas formas',
+              onPress: async () => {
+                try {
+                  const body = {
+                    categoria_id: categoriaId, subcategoria_id: subcategoriaId,
+                    descripcion: descripcion.trim(),
+                    latitud: location?.latitud, longitud: location?.longitud,
+                    precision_gps: location?.precision, colonia: colonia.trim() || undefined,
+                    calle: calle || undefined, numero: numero || undefined,
+                    omitir_duplicado: true,
+                  };
+                  const { data } = await api.post('/reports', body);
+                  navigation.replace('ReportSuccess', { reporteId: data.reporte.id });
+                } catch (e2) {
+                  Alert.alert('Error', e2.message);
+                }
+              },
+            },
+          ]
+        );
       } else {
         Alert.alert('Error al enviar', err.message);
       }

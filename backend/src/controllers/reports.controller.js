@@ -9,8 +9,32 @@ const ESTADOS_ACTIVOS = [
   'pendiente', 'asignado', 'en_proceso',
 ];
 const RADIO_DUPLICADO_METROS            = 20;
-const RADIO_DUPLICADO_PROXIMIDAD_METROS = 100;
+const RADIO_DUPLICADO_PROXIMIDAD_METROS = 20;
 const UMBRAL_PRECISION_GPS              = 50;
+const JACCARD_MIN_AUTO_CIERRE           = 0.20;
+
+const STOPWORDS_ES = new Set([
+  'el','la','los','las','un','una','de','del','en','con',
+  'que','es','se','al','por','para','su','lo','le',
+]);
+
+function normalizarTexto(texto) {
+  return texto
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !STOPWORDS_ES.has(w));
+}
+
+function jaccardSimilitud(a, b) {
+  const setA = new Set(normalizarTexto(a));
+  const setB = new Set(normalizarTexto(b));
+  if (setA.size === 0 && setB.size === 0) return 1;
+  if (setA.size === 0 || setB.size === 0) return 0;
+  const interseccion = [...setA].filter(w => setB.has(w)).length;
+  return interseccion / new Set([...setA, ...setB]).size;
+}
 
 // ─── helpers internos ────────────────────────────────────────────────────────
 
@@ -25,10 +49,10 @@ async function insertarHistorial(t, { reporte_id, usuario_id = null, rol_usuario
 }
 
 /**
- * Busca un reporte activo en la misma categoría dentro del radio indicado.
+ * Busca un reporte activo en la misma categoría Y subcategoría dentro del radio indicado.
  * Usa PostGIS ST_DWithin con cast a geography para trabajar en metros.
  */
-async function buscarDuplicado(t, { latitud, longitud, categoria_id, excluir_id = null }) {
+async function buscarDuplicado(t, { latitud, longitud, categoria_id, subcategoria_id, excluir_id = null }) {
   return t.oneOrNone(
     `SELECT
        r.id,
@@ -49,43 +73,45 @@ async function buscarDuplicado(t, { latitud, longitud, categoria_id, excluir_id 
      FROM reporte r
      JOIN categoria c ON c.id = r.categoria_id
      WHERE r.categoria_id = $3
-       AND r.estado = ANY($4::text[])
+       AND r.subcategoria_id = $4
+       AND r.estado = ANY($5::text[])
        AND r.ubicacion IS NOT NULL
-       AND ($5::uuid IS NULL OR r.id <> $5)
+       AND ($6::uuid IS NULL OR r.id <> $6)
        AND ST_DWithin(
              r.ubicacion::geography,
              ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography,
-             $6
+             $7
            )
      ORDER BY distancia_metros ASC
      LIMIT 1`,
-    [latitud, longitud, categoria_id, ESTADOS_ACTIVOS, excluir_id, RADIO_DUPLICADO_METROS]
+    [latitud, longitud, categoria_id, subcategoria_id, ESTADOS_ACTIVOS, excluir_id, RADIO_DUPLICADO_METROS]
   );
 }
 
 /**
- * Busca un reporte activo en la misma categoría dentro de 100 m creado en las
- * últimas 24 h. Usado para el cierre automático por proximidad.
+ * Busca un reporte activo en la misma categoría Y subcategoría dentro de 20 m creado en las
+ * últimas 24 h. Usado para el cierre automático por proximidad (requiere Jaccard >= 0.20).
  */
-async function buscarDuplicadoCercano(t, { latitud, longitud, categoria_id }) {
+async function buscarDuplicadoCercano(t, { latitud, longitud, categoria_id, subcategoria_id }) {
   return t.oneOrNone(
     `SELECT r.id, r.descripcion, r.estado, r.colonia, r.created_at
      FROM reporte r
      WHERE r.categoria_id = $3
-       AND r.estado = ANY($4::text[])
+       AND r.subcategoria_id = $4
+       AND r.estado = ANY($5::text[])
        AND r.ubicacion IS NOT NULL
        AND r.created_at > NOW() - INTERVAL '24 hours'
        AND ST_DWithin(
              r.ubicacion::geography,
              ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography,
-             $5
+             $6
            )
      ORDER BY ST_Distance(
        r.ubicacion::geography,
        ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
      ) ASC
      LIMIT 1`,
-    [latitud, longitud, categoria_id, ESTADOS_ACTIVOS, RADIO_DUPLICADO_PROXIMIDAD_METROS]
+    [latitud, longitud, categoria_id, subcategoria_id, ESTADOS_ACTIVOS, RADIO_DUPLICADO_PROXIMIDAD_METROS]
   );
 }
 
@@ -141,10 +167,13 @@ async function create(req, res) {
       const coloniaFinal = geoColonia?.nombre             ?? colonia ?? null;
       const coloniaPgId  = geoColonia?.colonia_poligono_id            ?? null;
 
-      // 2. Verificar duplicado por proximidad (100 m + 24 h) → cierre automático
+      // 2. Verificar duplicado por proximidad (20 m + 24 h + Jaccard ≥ 0.20) → cierre automático
       if (latitud != null && longitud != null) {
-        const duplicadoCercano = await buscarDuplicadoCercano(t, { latitud, longitud, categoria_id });
-        if (duplicadoCercano) {
+        const duplicadoCercano = await buscarDuplicadoCercano(t, { latitud, longitud, categoria_id, subcategoria_id });
+        const jaccard = duplicadoCercano
+          ? jaccardSimilitud(descripcion, duplicadoCercano.descripcion)
+          : 0;
+        if (duplicadoCercano && jaccard >= JACCARD_MIN_AUTO_CIERRE) {
           const reporteCerrado = await t.one(
             `INSERT INTO reporte
                (ciudadano_id, categoria_id, subcategoria_id, descripcion,
@@ -188,7 +217,7 @@ async function create(req, res) {
 
       // 3. Verificar duplicado interactivo (20 m, sin filtro de tiempo)
       if (!omitir_duplicado && latitud != null && longitud != null) {
-        const duplicado = await buscarDuplicado(t, { latitud, longitud, categoria_id });
+        const duplicado = await buscarDuplicado(t, { latitud, longitud, categoria_id, subcategoria_id });
         if (duplicado) {
           throw { status: 409, duplicado };
         }
