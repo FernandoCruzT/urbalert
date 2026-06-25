@@ -246,13 +246,25 @@ function EditAutoridad({ autoridadId }) {
   const navigate = useNavigate();
   const MUNICIPIOS = ['Guadalajara', 'Zapopan', 'Tonalá', 'San Pedro Tlaquepaque'];
 
+  const DEPARTAMENTOS = [
+    'Seguridad y orden público',
+    'Obras públicas y vialidad',
+    'Servicios públicos y limpieza',
+    'Alumbrado y energía',
+    'Agua y saneamiento',
+    'Parques y espacios públicos',
+    'Transporte y movilidad urbana',
+    'Protección civil y emergencias',
+    'Medio ambiente y ecología',
+  ];
+
   const [data,          setData]          = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState('');
   const [notice,        setNotice]        = useState('');
   const [fechaFiltro,   setFechaFiltro]   = useState('todo');
   const [modal,         setModal]         = useState(null); // 'depto' | 'municipio' | 'borrar'
-  const [deptoInput,    setDeptoInput]    = useState('');
+  const [deptoSel,      setDeptoSel]      = useState('');
   const [municipioSel,  setMunicipioSel]  = useState('');
   const [busy,          setBusy]          = useState(false);
 
@@ -261,7 +273,7 @@ function EditAutoridad({ autoridadId }) {
       const found = (authRes.data.autoridades || []).find(a => String(a.id) === String(autoridadId));
       if (!found) { setError('Autoridad no encontrada'); return; }
       setData(found);
-      setDeptoInput(found.departamento || '');
+      setDeptoSel(found.departamento || '');
       setMunicipioSel(found.municipio || '');
     }).catch(() => setError('No se pudo cargar el perfil de la autoridad'))
       .finally(() => setLoading(false));
@@ -270,8 +282,8 @@ function EditAutoridad({ autoridadId }) {
   async function handleUpdateDepto() {
     setBusy(true);
     try {
-      await api.patch(`/users/authority/${autoridadId}`, { departamento: deptoInput });
-      setData(prev => ({ ...prev, departamento: deptoInput }));
+      await api.patch(`/users/authority/${autoridadId}`, { departamento: deptoSel });
+      setData(prev => ({ ...prev, departamento: deptoSel }));
       setNotice('Departamento actualizado correctamente');
       setModal(null);
     } catch (err) {
@@ -341,7 +353,7 @@ function EditAutoridad({ autoridadId }) {
             selected={fechaFiltro}
             onSelect={setFechaFiltro}
           />
-          <button style={S.btn} onClick={() => { setDeptoInput(data.departamento || ''); setModal('depto'); }}>
+          <button style={S.btn} onClick={() => { setDeptoSel(data.departamento || ''); setModal('depto'); }}>
             Cambiar departamento
           </button>
           <button style={S.btn} onClick={() => { setMunicipioSel(data.municipio || ''); setModal('municipio'); }}>
@@ -382,16 +394,19 @@ function EditAutoridad({ autoridadId }) {
       {/* Modal departamento */}
       {modal === 'depto' && (
         <Modal title="Cambiar departamento" onClose={() => setModal(null)}>
-          <input
-            style={S.modalInput}
-            placeholder="Nombre del departamento"
-            value={deptoInput}
-            onChange={e => setDeptoInput(e.target.value)}
-            autoFocus
-          />
+          <select
+            style={S.modalSelect}
+            value={deptoSel}
+            onChange={e => setDeptoSel(e.target.value)}
+          >
+            <option value="">— Selecciona un departamento —</option>
+            {DEPARTAMENTOS.map(d => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
           <div style={S.modalRow}>
             <button style={S.btnSecondary} onClick={() => setModal(null)}>Cancelar</button>
-            <button style={S.btnPrimary} onClick={handleUpdateDepto} disabled={busy}>
+            <button style={S.btnPrimary} onClick={handleUpdateDepto} disabled={busy || !deptoSel}>
               {busy ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
