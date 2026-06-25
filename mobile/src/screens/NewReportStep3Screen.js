@@ -18,6 +18,8 @@ export default function NewReportStep3Screen({ navigation, route }) {
 
   const [descripcion, setDescripcion] = useState('');
   const [colonia,     setColonia]     = useState('');
+  const [calle,       setCalle]       = useState(null);
+  const [numero,      setNumero]      = useState(null);
   const [location,    setLocation]    = useState(null);   // { latitud, longitud, precision }
   const [locationText, setLocationText] = useState('Obteniendo ubicación…');
   const [fotos,       setFotos]       = useState([]);    // max 2
@@ -38,28 +40,30 @@ export default function NewReportStep3Screen({ navigation, route }) {
         const { latitude, longitude, accuracy } = pos.coords;
         setLocation({ latitud: latitude, longitud: longitude, precision: accuracy });
 
-        // Intentar reverse geocoding para dirección legible
+        // Intentar reverse geocoding para dirección legible + calle/numero
         try {
           const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
           if (place) {
+            const calleVal  = place.street || place.name || null;
+            const numeroVal = place.streetNumber || null;
+            setCalle(calleVal);
+            setNumero(numeroVal);
+
             const parts = [
-              place.street && place.streetNumber
-                ? `${place.street} ${place.streetNumber}`
-                : place.street,
+              calleVal && numeroVal ? `${calleVal} ${numeroVal}` : calleVal,
               place.district || place.subregion,
               place.city || place.region,
             ].filter(Boolean);
 
             if (parts.length > 0) {
               setLocationText(parts.join(', '));
-              // Pre-rellenar colonia si está vacía
               if (!colonia && (place.district || place.subregion)) {
                 setColonia(place.district || place.subregion);
               }
               return;
             }
           }
-        } catch (_) { /* reverse geocoding opcional */ }
+        } catch (_) { /* reverse geocoding opcional — continua sin calle/numero */ }
 
         // Fallback a coordenadas
         setLocationText(`Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`);
@@ -118,6 +122,8 @@ export default function NewReportStep3Screen({ navigation, route }) {
         longitud:        location?.longitud ?? null,
         precision_gps:   location?.precision ?? null,
         colonia:         colonia.trim() || undefined,
+        calle:           calle  || undefined,
+        numero:          numero || undefined,
       };
       const { data } = await api.post('/reports', body);
       const reporteId = data.reporte.id;
@@ -148,6 +154,7 @@ export default function NewReportStep3Screen({ navigation, route }) {
                   descripcion: descripcion.trim(),
                   latitud: location?.latitud, longitud: location?.longitud,
                   precision_gps: location?.precision, colonia: colonia.trim() || undefined,
+                  calle: calle || undefined, numero: numero || undefined,
                   omitir_duplicado: true,
                 };
                 const { data } = await api.post('/reports', body);
