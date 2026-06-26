@@ -59,6 +59,20 @@ const S = {
   sucBanner:  { padding: '0.6rem 0.75rem', background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 'var(--radius-sm)', color: '#166534', fontSize: '0.83rem' },
 };
 
+const CATEGORIA_DEPTO = {
+  'Agua y drenaje':               'Agua y saneamiento',
+  'Alumbrado público':            'Alumbrado y energía',
+  'Baches y daños en vialidades': 'Obras públicas y vialidad',
+  'Basura y limpieza urbana':     'Servicios públicos y limpieza',
+  'Espacios públicos':            'Parques y espacios públicos',
+  'Protección civil':             'Protección civil y emergencias',
+  'Seguridad pública':            'Seguridad y orden público',
+  'Transporte y movilidad':       'Transporte y movilidad urbana',
+};
+const DEPTO_CATEGORIA = Object.fromEntries(
+  Object.entries(CATEGORIA_DEPTO).map(([k, v]) => [v, k])
+);
+
 const FECHAS_OPTS = [
   { label: 'Última semana', value: 'semana' },
   { label: 'Último mes',    value: 'mes' },
@@ -262,19 +276,26 @@ function EditAutoridad({ autoridadId }) {
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState('');
   const [notice,        setNotice]        = useState('');
+  const [categorias,    setCategorias]    = useState([]);
   const [fechaFiltro,   setFechaFiltro]   = useState('todo');
-  const [modal,         setModal]         = useState(null); // 'depto' | 'municipio' | 'borrar'
+  const [modal,         setModal]         = useState(null); // 'depto' | 'municipio' | 'categoria' | 'borrar'
   const [deptoSel,      setDeptoSel]      = useState('');
+  const [categoriaSel,  setCategoriaSel]  = useState('');
   const [municipioSel,  setMunicipioSel]  = useState('');
   const [busy,          setBusy]          = useState(false);
 
   useEffect(() => {
-    api.get('/users/authorities').then(authRes => {
+    Promise.all([
+      api.get('/users/authorities'),
+      api.get('/categories'),
+    ]).then(([authRes, catRes]) => {
       const found = (authRes.data.autoridades || []).find(a => String(a.id) === String(autoridadId));
       if (!found) { setError('Autoridad no encontrada'); return; }
       setData(found);
       setDeptoSel(found.departamento || '');
       setMunicipioSel(found.municipio || '');
+      setCategoriaSel(found.categoria_id || '');
+      setCategorias(catRes.data.categorias || []);
     }).catch(() => setError('No se pudo cargar el perfil de la autoridad'))
       .finally(() => setLoading(false));
   }, [autoridadId]);
@@ -282,12 +303,45 @@ function EditAutoridad({ autoridadId }) {
   async function handleUpdateDepto() {
     setBusy(true);
     try {
-      await api.patch(`/users/authority/${autoridadId}`, { departamento: deptoSel });
-      setData(prev => ({ ...prev, departamento: deptoSel }));
-      setNotice('Departamento actualizado correctamente');
+      const catNombre = deptoSel ? DEPTO_CATEGORIA[deptoSel] : null;
+      const cat = catNombre ? categorias.find(c => c.nombre === catNombre) : null;
+      await api.patch(`/users/authority/${autoridadId}`, {
+        departamento: deptoSel,
+        ...(cat ? { categoria_id: cat.id } : {}),
+      });
+      setData(prev => ({
+        ...prev,
+        departamento: deptoSel,
+        ...(cat ? { categoria_id: cat.id, categoria_nombre: cat.nombre } : {}),
+      }));
+      if (cat) setCategoriaSel(cat.id);
+      setNotice(cat ? 'Departamento y categoría actualizados' : 'Departamento actualizado correctamente');
       setModal(null);
     } catch (err) {
       setError(err?.response?.data?.message || 'Error al actualizar el departamento');
+    } finally { setBusy(false); }
+  }
+
+  async function handleUpdateCategoria() {
+    setBusy(true);
+    try {
+      const cat = categorias.find(c => c.id === categoriaSel);
+      const depto = cat ? CATEGORIA_DEPTO[cat.nombre] : null;
+      await api.patch(`/users/authority/${autoridadId}`, {
+        categoria_id: categoriaSel,
+        ...(depto ? { departamento: depto } : {}),
+      });
+      setData(prev => ({
+        ...prev,
+        categoria_id: categoriaSel,
+        categoria_nombre: cat?.nombre || prev.categoria_nombre,
+        ...(depto ? { departamento: depto } : {}),
+      }));
+      if (depto) setDeptoSel(depto);
+      setNotice(depto ? 'Categoría y departamento actualizados' : 'Categoría actualizada correctamente');
+      setModal(null);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Error al actualizar la categoría');
     } finally { setBusy(false); }
   }
 
@@ -353,6 +407,9 @@ function EditAutoridad({ autoridadId }) {
             selected={fechaFiltro}
             onSelect={setFechaFiltro}
           />
+          <button style={S.btn} onClick={() => { setCategoriaSel(data.categoria_id || ''); setModal('categoria'); }}>
+            Cambiar categoría
+          </button>
           <button style={S.btn} onClick={() => { setDeptoSel(data.departamento || ''); setModal('depto'); }}>
             Cambiar departamento
           </button>
@@ -390,6 +447,26 @@ function EditAutoridad({ autoridadId }) {
           </tbody>
         </table>
       </div>
+
+      {/* Modal categoría */}
+      {modal === 'categoria' && (
+        <Modal title="Cambiar categoría" onClose={() => setModal(null)}>
+          <select
+            style={S.modalSelect}
+            value={categoriaSel}
+            onChange={e => setCategoriaSel(e.target.value)}
+          >
+            <option value="">— Selecciona una categoría —</option>
+            {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <div style={S.modalRow}>
+            <button style={S.btnSecondary} onClick={() => setModal(null)}>Cancelar</button>
+            <button style={S.btnPrimary} onClick={handleUpdateCategoria} disabled={busy || !categoriaSel}>
+              {busy ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Modal departamento */}
       {modal === 'depto' && (

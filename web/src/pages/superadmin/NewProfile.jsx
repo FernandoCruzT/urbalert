@@ -41,6 +41,20 @@ const S = {
 
 const TIPO_LABELS = { autoridad: 'Autoridad', superadmin: 'Superadmin' };
 
+const CATEGORIA_DEPTO = {
+  'Agua y drenaje':               'Agua y saneamiento',
+  'Alumbrado público':            'Alumbrado y energía',
+  'Baches y daños en vialidades': 'Obras públicas y vialidad',
+  'Basura y limpieza urbana':     'Servicios públicos y limpieza',
+  'Espacios públicos':            'Parques y espacios públicos',
+  'Protección civil':             'Protección civil y emergencias',
+  'Seguridad pública':            'Seguridad y orden público',
+  'Transporte y movilidad':       'Transporte y movilidad urbana',
+};
+const DEPTO_CATEGORIA = Object.fromEntries(
+  Object.entries(CATEGORIA_DEPTO).map(([k, v]) => [v, k])
+);
+
 function Field({ label, error, children }) {
   return (
     <div style={S.fieldGrp}>
@@ -268,7 +282,14 @@ export default function NewProfile() {
 
                 <Field label="Categoría" error={errors.categoria_id}>
                   <select style={{ ...S.select, ...(errors.categoria_id ? S.inputErr : {}) }}
-                    value={authForm.categoria_id} onChange={e => setA('categoria_id', e.target.value)}>
+                    value={authForm.categoria_id}
+                    onChange={e => {
+                      const catId = e.target.value;
+                      setA('categoria_id', catId);
+                      const catNombre = categorias.find(c => c.id === catId)?.nombre;
+                      const depto = catNombre ? CATEGORIA_DEPTO[catNombre] : null;
+                      if (depto) setA('departamento', depto);
+                    }}>
                     <option value="">— Selecciona una categoría —</option>
                     {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                   </select>
@@ -276,7 +297,15 @@ export default function NewProfile() {
 
                 <Field label="Departamento">
                   <select style={S.select} value={authForm.departamento}
-                    onChange={e => setA('departamento', e.target.value)}>
+                    onChange={e => {
+                      const depto = e.target.value;
+                      setA('departamento', depto);
+                      const catNombre = depto ? DEPTO_CATEGORIA[depto] : null;
+                      if (catNombre) {
+                        const cat = categorias.find(c => c.nombre === catNombre);
+                        if (cat) setA('categoria_id', cat.id);
+                      }
+                    }}>
                     <option value="">— Departamento (opcional) —</option>
                     {DEPARTAMENTOS.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
