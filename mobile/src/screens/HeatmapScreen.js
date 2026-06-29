@@ -280,6 +280,33 @@ export default function HeatmapScreen({ navigation }) {
           </View>
         )}
 
+        {/* Leyenda de colores */}
+        <View style={s.legend}>
+          {(maxReportes >= 4
+            ? (() => {
+                const q1 = Math.max(1, Math.floor(maxReportes * 0.25));
+                const q2 = Math.max(q1 + 1, Math.floor(maxReportes * 0.50));
+                const q3 = Math.max(q2 + 1, Math.floor(maxReportes * 0.75));
+                return [
+                  { color: '#FCD34D', label: `1–${q1}` },
+                  { color: '#F97316', label: `${q1 + 1}–${q2}` },
+                  { color: '#DC2626', label: `${q2 + 1}–${q3}` },
+                  { color: '#991B1B', label: `${q3 + 1}+` },
+                ];
+              })()
+            : [
+                { color: '#FCD34D', label: '1'   },
+                { color: '#F97316', label: '2–3' },
+                { color: '#DC2626', label: '4–6' },
+                { color: '#991B1B', label: '7+'  },
+              ]
+          ).map(item => (
+            <View key={item.label} style={s.legendItem}>
+              <View style={[s.legendDot, { backgroundColor: item.color }]} />
+              <Text style={s.legendText}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
 
         {/* FAB — ubicación actual */}
         <TouchableOpacity style={s.locFab} onPress={goToLocation} activeOpacity={0.85}>
