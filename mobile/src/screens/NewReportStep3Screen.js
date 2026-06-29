@@ -111,6 +111,10 @@ export default function NewReportStep3Screen({ navigation, route }) {
       Alert.alert('Descripción requerida', 'Por favor describe el problema.');
       return;
     }
+    if (fotos.length === 0) {
+      Alert.alert('Foto requerida', 'Debes agregar al menos una foto como evidencia del problema.');
+      return;
+    }
     setLoading(true);
     try {
       // 1. Crear el reporte
@@ -223,13 +227,23 @@ export default function NewReportStep3Screen({ navigation, route }) {
               : <Text style={s.locationText}>{locationText}</Text>
             }
           </View>
+          <Text style={s.correctionHint}>Puedes corregir la dirección si es incorrecta</Text>
 
-          <Text style={s.sectionLabel}>🏘️ Colonia (opcional)</Text>
+          <Text style={s.sectionLabel}>Calle</Text>
           <TextInput
             style={s.input}
-            value={colonia}
-            onChangeText={setColonia}
-            placeholder="Ej. Jardines del Sol"
+            value={calle ?? ''}
+            onChangeText={setCalle}
+            placeholder="Ej. Av. Revolución"
+            placeholderTextColor="#9CA3AF"
+          />
+
+          <Text style={s.sectionLabel}>Número</Text>
+          <TextInput
+            style={s.input}
+            value={numero ?? ''}
+            onChangeText={setNumero}
+            placeholder="Ej. 1234"
             placeholderTextColor="#9CA3AF"
           />
 
@@ -306,8 +320,9 @@ const s = StyleSheet.create({
   scroll:       { padding: 16, paddingBottom: 40 },
   sectionLabel: { fontSize: 13, fontWeight: '700', color: C.primary, marginBottom: 6, marginTop: 16 },
   locationBox:  { backgroundColor: C.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#E5E7EB', minHeight: 42, justifyContent: 'center' },
-  locationText: { fontSize: 13, color: '#374151' },
-  input:        { backgroundColor: C.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 14, color: '#111827' },
+  locationText:   { fontSize: 13, color: '#374151' },
+  correctionHint: { fontSize: 11, color: '#9CA3AF', marginTop: 6, marginBottom: 2 },
+  input:          { backgroundColor: C.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 14, color: '#111827' },
   textarea:     { backgroundColor: C.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 14, color: '#111827', minHeight: 110 },
   charCount:    { fontSize: 11, color: '#9CA3AF', textAlign: 'right', marginTop: 4 },
   photoRow:     { flexDirection: 'row', gap: 12 },
