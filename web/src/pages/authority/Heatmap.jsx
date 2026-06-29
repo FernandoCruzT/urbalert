@@ -37,7 +37,7 @@ function useDidUpdateEffect(fn, deps) {
 function coloniaColor(colonia, metrica, maxReportes) {
   const valor = metrica === 'urgencia' ? colonia?.peso_total : colonia?.total;
   if (!valor || valor === 0) return null;
-  if (!maxReportes || maxReportes <= 1) {
+  if (!maxReportes || maxReportes < 1) {
     if (metrica === 'urgencia') {
       if (valor <= 2)  return { fill: '#FCD34D', opacity: 0.45 };
       if (valor <= 5)  return { fill: '#F97316', opacity: 0.55 };

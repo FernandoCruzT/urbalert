@@ -49,7 +49,7 @@ const ESTADO_OPTS = ['todos', 'abiertos', 'cerrados'];
 // ── Helpers de mapa ───────────────────────────────────────────────────────────
 
 function polyColor(total, maxReportes) {
-  if (!maxReportes || maxReportes <= 1) {
+  if (!maxReportes || maxReportes < 1) {
     if (total >= 7) return '#991B1B';
     if (total >= 4) return '#DC2626';
     if (total >= 2) return '#F97316';
