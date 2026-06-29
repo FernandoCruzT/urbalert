@@ -157,6 +157,99 @@ async function runAssignmentJob() {
   );
 }
 
+/**
+ * Reasigna reportes que llevan más de 3 días en estado 'asignado' sin avanzar.
+ * Busca una autoridad alternativa del mismo municipio y categoría con menor carga.
+ * Si no hay alternativa, el reporte se mantiene asignado a la autoridad actual.
+ */
+async function runReasignacionJob() {
+  const atascados = await db.any(`
+    SELECT
+      r.id,
+      r.categoria_id,
+      r.autoridad_id       AS autoridad_actual_id,
+      r.colonia_poligono_id,
+      r.latitud,
+      r.longitud,
+      c.usuario_id         AS ciudadano_usuario_id
+    FROM reporte r
+    JOIN ciudadano c ON c.id = r.ciudadano_id
+    WHERE r.estado = 'asignado'
+      AND r.updated_at < NOW() - INTERVAL '3 days'
+  `);
+
+  if (atascados.length === 0) return;
+
+  let reasignados    = 0;
+  let sinAlternativa = 0;
+
+  for (const r of atascados) {
+    try {
+      await db.tx(async (t) => {
+        const nueva = await t.oneOrNone(`
+          SELECT a.id, a.usuario_id
+          FROM autoridad a
+          WHERE a.categoria_id = $1
+            AND a.activo = TRUE
+            AND a.id != $2
+            AND (
+              ($3::uuid IS NOT NULL
+               AND LOWER(a.municipio) = LOWER((
+                 SELECT municipio FROM colonia_poligono WHERE id = $3)))
+              OR
+              ($3::uuid IS NULL AND $4::float IS NOT NULL AND $5::float IS NOT NULL
+               AND LOWER(a.municipio) = LOWER((
+                 SELECT cp.municipio FROM colonia_poligono cp
+                 WHERE ST_Contains(cp.geom, ST_SetSRID(ST_MakePoint($5, $4), 4326))
+                 LIMIT 1
+               )))
+            )
+          ORDER BY a.carga_ponderada ASC, a.reportes_activos ASC
+          LIMIT 1
+        `, [r.categoria_id, r.autoridad_actual_id,
+            r.colonia_poligono_id || null, r.latitud || null, r.longitud || null]);
+
+        if (!nueva) { sinAlternativa++; return; }
+
+        await t.none(
+          `UPDATE reporte SET autoridad_id = $1, updated_at = NOW() WHERE id = $2`,
+          [nueva.id, r.id]
+        );
+
+        await t.none(
+          `INSERT INTO historial_estado
+             (reporte_id, estado_anterior, estado_nuevo, rol_usuario, observacion)
+           VALUES ($1, 'asignado', 'asignado', 'sistema', $2)`,
+          [r.id, 'Reasignado automáticamente por inactividad de 3 días']
+        );
+
+        await createNotification(
+          r.ciudadano_usuario_id, r.id,
+          'Reporte reasignado',
+          'Tu reporte ha sido reasignado a una nueva autoridad para agilizar su atención',
+          t
+        );
+
+        await createNotification(
+          nueva.usuario_id, r.id,
+          'Nuevo reporte asignado',
+          'Se te ha asignado un reporte que requiere atención',
+          t
+        );
+
+        reasignados++;
+      });
+    } catch (err) {
+      console.error(`[reasignacion.job] Error en reporte ${r.id}:`, err.message);
+    }
+  }
+
+  console.log(
+    `[reasignacion.job] ${new Date().toISOString()} — ` +
+    `revisados: ${atascados.length} | reasignados: ${reasignados} | sin alternativa: ${sinAlternativa}`
+  );
+}
+
 // Previene solapamiento entre ejecuciones del cron si el job tarda más de 2 min.
 let jobRunning = false;
 
@@ -174,6 +267,7 @@ function startAssignmentJob() {
     try {
       await runAutoValidationJob();
       await runAssignmentJob();
+      await runReasignacionJob();
     } catch (err) {
       console.error('[assignment.job] Error inesperado:', err.message);
     } finally {
@@ -184,4 +278,4 @@ function startAssignmentJob() {
   console.log('[assignment.job] Job de asignación automática activo (cada 2 min)');
 }
 
-module.exports = { startAssignmentJob, runAssignmentJob, runAutoValidationJob };
+module.exports = { startAssignmentJob, runAssignmentJob, runAutoValidationJob, runReasignacionJob };

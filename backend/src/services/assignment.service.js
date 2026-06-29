@@ -141,7 +141,7 @@ async function assignReport(reporte_id) {
       reporte.ciudadano_usuario_id,
       reporte_id,
       'Reporte asignado',
-      'Tu reporte ha sido asignado a una autoridad que se encargará de atenderlo',
+      'Tu reporte ha sido asignado a una autoridad y sera atendido a la brevedad',
       t
     );
 

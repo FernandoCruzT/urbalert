@@ -88,6 +88,21 @@ async function updateStatus(req, res) {
       const estado_anterior = reporte.estado;
       const esNotaActualizacion = estado === 'en_proceso' && estado_anterior === 'en_proceso';
 
+      // Límite de 3 reportes en proceso simultáneos por autoridad
+      if (estado === 'en_proceso' && !esNotaActualizacion) {
+        const { count } = await t.one(
+          `SELECT COUNT(*)::int AS count FROM reporte
+           WHERE autoridad_id = $1 AND estado = 'en_proceso'`,
+          [req.user.profileId]
+        );
+        if (count >= 3) {
+          throw {
+            status: 400,
+            message: 'No puedes tener más de 3 reportes en proceso simultáneamente. Resuelve o cierra uno antes de continuar.',
+          };
+        }
+      }
+
       let observacion = null;
       if (esNotaActualizacion) {
         observacion = observacionBody?.trim() || null;
