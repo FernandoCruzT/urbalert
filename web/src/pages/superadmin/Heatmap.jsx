@@ -38,7 +38,7 @@ function maxSemanaForAnio(anio) {
 function coloniaColor(colonia, metrica, maxReportes) {
   const valor = metrica === 'urgencia' ? colonia?.peso_total : colonia?.total;
   if (!valor || valor === 0) return null;
-  if (!maxReportes || maxReportes < 1) {
+  if (!maxReportes || maxReportes < 4) {
     if (metrica === 'urgencia') {
       if (valor <= 2)  return { fill: '#FCD34D', opacity: 0.45 };
       if (valor <= 5)  return { fill: '#F97316', opacity: 0.55 };
@@ -408,32 +408,6 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
         </div>
       )}
 
-      <div style={S.legend}>
-        <strong style={{ fontSize:'0.73rem', marginBottom:2 }}>Reportes por colonia</strong>
-        {(maxReportes > 1
-          ? (() => {
-              const q1 = Math.max(1, Math.floor(maxReportes * 0.25));
-              const q2 = Math.max(q1 + 1, Math.floor(maxReportes * 0.50));
-              const q3 = Math.max(q2 + 1, Math.floor(maxReportes * 0.75));
-              return [
-                { color: '#FCD34D', label: `1–${q1} reportes` },
-                { color: '#F97316', label: `${q1 + 1}–${q2} reportes` },
-                { color: '#DC2626', label: `${q2 + 1}–${q3} reportes` },
-                { color: '#991B1B', label: `${q3 + 1}+ reportes` },
-              ];
-            })()
-          : [
-              { color: '#FCD34D', label: '1 reporte' },
-              { color: '#F97316', label: '2–3 reportes' },
-              { color: '#DC2626', label: '4–6 reportes' },
-              { color: '#991B1B', label: '7+ reportes' },
-            ]
-        ).map(item => (
-          <div key={item.label} style={S.legendRow}>
-            <div style={S.legendBox(item.color)} /> {item.label}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
