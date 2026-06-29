@@ -34,27 +34,34 @@ function useDidUpdateEffect(fn, deps) {
 
 // ── Choropleth helpers ────────────────────────────────────────────────────────
 
-function coloniaColor(colonia, metrica) {
+function coloniaColor(colonia, metrica, maxReportes) {
   const valor = metrica === 'urgencia' ? colonia?.peso_total : colonia?.total;
   if (!valor || valor === 0) return null;
-  if (metrica === 'urgencia') {
-    if (valor <= 2)  return { fill: '#FFF176', opacity: 0.45 };
-    if (valor <= 5)  return { fill: '#FFB300', opacity: 0.55 };
-    if (valor <= 10) return { fill: '#F57C00', opacity: 0.65 };
-    return                   { fill: '#D32F2F', opacity: 0.75 };
+  if (!maxReportes || maxReportes <= 1) {
+    if (metrica === 'urgencia') {
+      if (valor <= 2)  return { fill: '#FCD34D', opacity: 0.45 };
+      if (valor <= 5)  return { fill: '#F97316', opacity: 0.55 };
+      if (valor <= 10) return { fill: '#DC2626', opacity: 0.65 };
+      return                   { fill: '#991B1B', opacity: 0.75 };
+    }
+    if (valor <= 1) return { fill: '#FCD34D', opacity: 0.45 };
+    if (valor <= 3) return { fill: '#F97316', opacity: 0.55 };
+    if (valor <= 6) return { fill: '#DC2626', opacity: 0.65 };
+    return              { fill: '#991B1B', opacity: 0.75 };
   }
-  if (valor <= 1) return { fill: '#FFF176', opacity: 0.45 };
-  if (valor <= 3) return { fill: '#FFB300', opacity: 0.55 };
-  if (valor <= 6) return { fill: '#F57C00', opacity: 0.65 };
-  return              { fill: '#D32F2F', opacity: 0.75 };
+  const pct = Math.min(1, valor / maxReportes);
+  if (pct > 0.75) return { fill: '#991B1B', opacity: 0.75 };
+  if (pct > 0.50) return { fill: '#DC2626', opacity: 0.65 };
+  if (pct > 0.25) return { fill: '#F97316', opacity: 0.55 };
+  return                  { fill: '#FCD34D', opacity: 0.45 };
 }
 
-function applyStyles(dataLayer, lookup, metrica, activeMunicipio, municipioLookup) {
+function applyStyles(dataLayer, lookup, metrica, activeMunicipio, municipioLookup, maxReportes) {
   dataLayer.setStyle((feature) => {
     const nombre      = feature.getProperty('nombre');
     const key         = nombre?.toLowerCase().trim();
     const data        = lookup[key];
-    const color       = coloniaColor(data, metrica);
+    const color       = coloniaColor(data, metrica, maxReportes);
     const inMunicipio = activeMunicipio
       ? (municipioLookup[key] === activeMunicipio)
       : true;
@@ -217,15 +224,17 @@ function Dropdown({ label, options, value, onChange }) {
 
 // ── ChoroplethMap ─────────────────────────────────────────────────────────────
 
-function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipioLookupRef, onColoniaClick }) {
+function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipioLookupRef, onColoniaClick, maxReportes }) {
   const mapRef            = useRef(null);
   const dataLayerRef      = useRef(null);
   const geojsonLoaded     = useRef(false);
   const onColoniaClickRef = useRef(onColoniaClick);
+  const maxReportesRef    = useRef(maxReportes);
   const [tooltip, setTooltip] = useState(null);
   const lookup = useRef({});
 
   useEffect(() => { onColoniaClickRef.current = onColoniaClick; }, [onColoniaClick]);
+  useEffect(() => { maxReportesRef.current = maxReportes; }, [maxReportes]);
 
   useEffect(() => {
     const map = {};
@@ -239,7 +248,7 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
     dataLayerRef.current = dataLayer;
     dataLayer.loadGeoJson('/colonias-zmg.geojson', {}, () => {
       geojsonLoaded.current = true;
-      applyStyles(dataLayer, lookup.current, metrica, null, municipioLookupRef.current);
+      applyStyles(dataLayer, lookup.current, metrica, null, municipioLookupRef.current, maxReportesRef.current);
     });
     dataLayer.addListener('mouseover', (event) => {
       const nombre = event.feature.getProperty('nombre');
@@ -269,9 +278,9 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
 
   useEffect(() => {
     if (dataLayerRef.current && geojsonLoaded.current) {
-      applyStyles(dataLayerRef.current, lookup.current, metrica, showBorders ? municipio : null, municipioLookupRef.current);
+      applyStyles(dataLayerRef.current, lookup.current, metrica, showBorders ? municipio : null, municipioLookupRef.current, maxReportes);
     }
-  }, [coloniaData, metrica, municipio, showBorders]);
+  }, [coloniaData, metrica, municipio, showBorders, maxReportes]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -284,10 +293,29 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
       )}
       <div style={S.legend}>
         <strong style={{ fontSize: '0.73rem', marginBottom: 2 }}>Reportes por colonia</strong>
-        <div style={S.legendRow}><div style={S.legendBox('#FFF176')} /> 1 reporte</div>
-        <div style={S.legendRow}><div style={S.legendBox('#FFB300')} /> 2–3 reportes</div>
-        <div style={S.legendRow}><div style={S.legendBox('#F57C00')} /> 4–6 reportes</div>
-        <div style={S.legendRow}><div style={S.legendBox('#D32F2F')} /> 7+ reportes</div>
+        {(maxReportes > 1
+          ? (() => {
+              const q1 = Math.max(1, Math.floor(maxReportes * 0.25));
+              const q2 = Math.max(q1 + 1, Math.floor(maxReportes * 0.50));
+              const q3 = Math.max(q2 + 1, Math.floor(maxReportes * 0.75));
+              return [
+                { color: '#FCD34D', label: `1–${q1} reportes` },
+                { color: '#F97316', label: `${q1 + 1}–${q2} reportes` },
+                { color: '#DC2626', label: `${q2 + 1}–${q3} reportes` },
+                { color: '#991B1B', label: `${q3 + 1}+ reportes` },
+              ];
+            })()
+          : [
+              { color: '#FCD34D', label: '1 reporte' },
+              { color: '#F97316', label: '2–3 reportes' },
+              { color: '#DC2626', label: '4–6 reportes' },
+              { color: '#991B1B', label: '7+ reportes' },
+            ]
+        ).map(item => (
+          <div key={item.label} style={S.legendRow}>
+            <div style={S.legendBox(item.color)} /> {item.label}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -309,6 +337,7 @@ export default function AuthorityHeatmap() {
   const [vista,            setVista]            = useState('periodo');
   const [metrica,          setMetrica]          = useState('cantidad');
   const [coloniaData,      setColoniaData]      = useState([]);
+  const [maxReportes,      setMaxReportes]      = useState(0);
   const [showBorders,      setShowBorders]      = useState(false);
   const [drawer, setDrawer] = useState({ open: false, colonia: null, reportes: [], loading: false });
   const [toastMsg, setToastMsg] = useState('');
@@ -375,8 +404,11 @@ export default function AuthorityHeatmap() {
     if (subcatId)        params.subcategoria    = subcatNombre;
     if (municipioPropio) params.municipio_nombre = municipioPropio;
     api.get('/heatmap', { params })
-      .then(({ data }) => setColoniaData(data.colonias || []))
-      .catch(() => setColoniaData([]));
+      .then(({ data }) => {
+        setColoniaData(data.colonias || []);
+        setMaxReportes(data.max_reportes ?? 0);
+      })
+      .catch(() => { setColoniaData([]); setMaxReportes(0); });
   }, [temporalidad, anio, mes, semana, subcatId, subcatNombre, estado, vista, metrica, municipioPropio]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -509,6 +541,7 @@ export default function AuthorityHeatmap() {
                 showBorders={showBorders}
                 municipioLookupRef={municipioLookupRef}
                 onColoniaClick={handleColoniaClick}
+                maxReportes={maxReportes}
               />
             : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-muted)' }}>Cargando mapa…</div>
           }

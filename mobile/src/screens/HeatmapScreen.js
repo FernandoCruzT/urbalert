@@ -48,11 +48,18 @@ const ESTADO_OPTS = ['todos', 'abiertos', 'cerrados'];
 
 // ── Helpers de mapa ───────────────────────────────────────────────────────────
 
-function polyColor(total) {
-  if (total >= 7) return '#D32F2F';
-  if (total >= 4) return '#F57C00';
-  if (total >= 2) return '#FFB300';
-  return '#FFF176';
+function polyColor(total, maxReportes) {
+  if (!maxReportes || maxReportes <= 1) {
+    if (total >= 7) return '#991B1B';
+    if (total >= 4) return '#DC2626';
+    if (total >= 2) return '#F97316';
+    return '#FCD34D';
+  }
+  const pct = total / maxReportes;
+  if (pct > 0.75) return '#991B1B';
+  if (pct > 0.50) return '#DC2626';
+  if (pct > 0.25) return '#F97316';
+  return '#FCD34D';
 }
 
 function ringToCoords(ring) {
@@ -105,8 +112,9 @@ export default function HeatmapScreen({ navigation }) {
   const [locationGranted, setLocationGranted] = useState(false);
 
   // Datos del mapa
-  const [colonias, setColonias] = useState([]);
-  const [loading,  setLoading]  = useState(true);
+  const [colonias,     setColonias]     = useState([]);
+  const [maxReportes,  setMaxReportes]  = useState(0);
+  const [loading,      setLoading]      = useState(true);
 
   // Animación del drawer
   const overlayOpacity = drawerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.55] });
@@ -168,11 +176,13 @@ export default function HeatmapScreen({ navigation }) {
     try {
       const { data } = await api.get('/heatmap', { params });
       console.log('[Heatmap] /heatmap OK — colonias:', data.colonias?.length ?? 0,
-        '| primera:', data.colonias?.[0]?.colonia);
+        '| primera:', data.colonias?.[0]?.colonia, '| max_reportes:', data.max_reportes);
       setColonias(data.colonias ?? []);
+      setMaxReportes(data.max_reportes ?? 0);
     } catch (err) {
       console.error('[Heatmap] /heatmap ERROR:', err.message);
       setColonias([]);
+      setMaxReportes(0);
     }
     setLoading(false);
   }, [temporalidad, semana, vista, estado, catId, subcatNombre]);
@@ -249,7 +259,7 @@ export default function HeatmapScreen({ navigation }) {
           {colonias.flatMap((col) => {
             const rings = coloniaGeomMap.get(col.colonia?.toLowerCase());
             if (!rings || rings.length === 0) return [];
-            const color     = polyColor(col.total);
+            const color     = polyColor(col.total, maxReportes);
             const fillColor = color + 'BB';
             return rings.map((ring, ri) => (
               <Polygon
@@ -272,12 +282,25 @@ export default function HeatmapScreen({ navigation }) {
 
         {/* Leyenda de colores */}
         <View style={s.legend}>
-          {[
-            { color: '#FFF176', label: '1'   },
-            { color: '#FFB300', label: '2–3' },
-            { color: '#F57C00', label: '4–6' },
-            { color: '#D32F2F', label: '7+'  },
-          ].map(item => (
+          {(maxReportes > 1
+            ? (() => {
+                const q1 = Math.max(1, Math.floor(maxReportes * 0.25));
+                const q2 = Math.max(q1 + 1, Math.floor(maxReportes * 0.50));
+                const q3 = Math.max(q2 + 1, Math.floor(maxReportes * 0.75));
+                return [
+                  { color: '#FCD34D', label: `1–${q1}` },
+                  { color: '#F97316', label: `${q1 + 1}–${q2}` },
+                  { color: '#DC2626', label: `${q2 + 1}–${q3}` },
+                  { color: '#991B1B', label: `${q3 + 1}+` },
+                ];
+              })()
+            : [
+                { color: '#FCD34D', label: '1'   },
+                { color: '#F97316', label: '2–3' },
+                { color: '#DC2626', label: '4–6' },
+                { color: '#991B1B', label: '7+'  },
+              ]
+          ).map(item => (
             <View key={item.label} style={s.legendItem}>
               <View style={[s.legendDot, { backgroundColor: item.color }]} />
               <Text style={s.legendText}>{item.label}</Text>

@@ -174,7 +174,8 @@ async function heatmap(req, res) {
       subcategorias = subRows.map(r => r.nombre);
     }
 
-    return res.json({ total: rows.length, colonias: rows, subcategorias });
+    const maxReportes = rows.length > 0 ? rows[0].total : 0;
+    return res.json({ total: rows.length, colonias: rows, subcategorias, max_reportes: maxReportes });
   } catch (err) {
     console.error('[heatmap]', err);
     return res.status(500).json({ message: 'Error interno del servidor' });
