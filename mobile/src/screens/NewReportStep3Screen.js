@@ -167,9 +167,19 @@ export default function NewReportStep3Screen({ navigation, route }) {
             { text: 'Cancelar', style: 'cancel' },
             {
               text: 'Confirmar reporte existente',
-              onPress: () => {
-                Alert.alert('Gracias', 'Tu apoyo ayuda a priorizar la atención del reporte existente.');
-                navigation.goBack();
+              onPress: async () => {
+                try {
+                  const { status } = await api.post('/reports', {
+                    confirmar_existente: true,
+                    reporte_existente_id: duplicado.id,
+                  });
+                  if (status === 200) {
+                    Alert.alert('Tu confirmacion fue registrada. Gracias por reportar.');
+                    navigation.navigate('Home');
+                  }
+                } catch (e2) {
+                  Alert.alert('Error', e2.message);
+                }
               },
             },
             {

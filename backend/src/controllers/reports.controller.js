@@ -123,6 +123,31 @@ async function buscarDuplicadoCercano(t, { latitud, longitud, categoria_id, subc
  * Si omitir_duplicado = true en el body, salta la verificación.
  */
 async function create(req, res) {
+  const { confirmar_existente, reporte_existente_id } = req.body;
+
+  if (confirmar_existente === true) {
+    if (!reporte_existente_id) {
+      return res.status(400).json({ message: 'Falta reporte_existente_id' });
+    }
+    try {
+      const actualizado = await db.oneOrNone(
+        `UPDATE reporte SET confirmaciones = confirmaciones + 1 WHERE id = $1 RETURNING confirmaciones`,
+        reporte_existente_id
+      );
+      if (!actualizado) {
+        return res.status(404).json({ message: 'El reporte a confirmar no existe' });
+      }
+      return res.status(200).json({
+        message: 'Reporte confirmado',
+        reporte_id: reporte_existente_id,
+        confirmaciones: actualizado.confirmaciones,
+      });
+    } catch (err) {
+      console.error('[reports.create.confirmarExistente]', err);
+      return res.status(500).json({ message: 'Error interno del servidor' });
+    }
+  }
+
   const {
     categoria_id,
     subcategoria_id,
