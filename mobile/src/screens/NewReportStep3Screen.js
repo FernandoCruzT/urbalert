@@ -111,8 +111,8 @@ export default function NewReportStep3Screen({ navigation, route }) {
       Alert.alert('Descripción requerida', 'Por favor describe el problema.');
       return;
     }
-    if (descripcion.trim().length < 20) {
-      Alert.alert('Descripción muy corta', 'La descripcion debe tener al menos 20 caracteres');
+    if (descripcion.trim().length < 8) {
+      Alert.alert('Descripción muy corta', 'La descripcion debe tener al menos 8 caracteres');
       return;
     }
     if (fotos.length === 0) {
@@ -264,7 +264,7 @@ export default function NewReportStep3Screen({ navigation, route }) {
             textAlignVertical="top"
             maxLength={300}
           />
-          <Text style={descripcion.length < 20 ? {color:'#DC2626'} : {color:'#888'}}>{descripcion.length}/300 caracteres</Text>
+          <Text style={descripcion.length < 8 ? {color:'#DC2626'} : {color:'#888'}}>{descripcion.length}/300 caracteres</Text>
 
           {/* Fotos */}
           <Text style={s.sectionLabel}>📷 Fotos ({fotos.length}/2)</Text>
@@ -294,9 +294,9 @@ export default function NewReportStep3Screen({ navigation, route }) {
 
           {/* Botón enviar */}
           <TouchableOpacity
-            style={[s.btnSubmit, (loading || descripcion.trim().length < 20) && { opacity: 0.5 }]}
+            style={[s.btnSubmit, (loading || descripcion.trim().length < 8) && { opacity: 0.5 }]}
             onPress={handleSubmit}
-            disabled={loading || descripcion.trim().length < 20}
+            disabled={loading || descripcion.trim().length < 8}
             activeOpacity={0.85}
           >
             {loading
