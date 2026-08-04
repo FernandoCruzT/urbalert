@@ -65,7 +65,7 @@ async function createAuthority(req, res) {
     });
 
     sendWelcomeAuthority(result.usuario.email, result.usuario.nombre, password)
-      .catch(err => console.error('[mail] Error enviando bienvenida:', err.message));
+      .catch(err => console.error('[mail] Error enviando bienvenida:', err.message, JSON.stringify(err)));
 
     return res.status(201).json({
       message: 'Autoridad creada correctamente',

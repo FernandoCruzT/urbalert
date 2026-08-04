@@ -151,7 +151,7 @@ async function register(req, res) {
 
     // Enviar código de verificación por correo (no bloquea la respuesta)
     sendVerificationCode(result.usuario.email, result.usuario.nombre, result.codigo)
-      .catch(err => console.error('[mail] Error enviando código de verificación:', err.message));
+      .catch(err => console.error('[mail] Error enviando código de verificación:', err.message, JSON.stringify(err)));
 
     // Respuesta ciudadano: incluye token para login inmediato
     const token = signToken({
