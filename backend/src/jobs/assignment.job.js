@@ -250,15 +250,15 @@ async function runReasignacionJob() {
   );
 }
 
-// Previene solapamiento entre ejecuciones del cron si el job tarda más de 2 min.
+// Previene solapamiento entre ejecuciones del cron si el job tarda más de 10 min.
 let jobRunning = false;
 
 /**
  * Registra el job de asignación automática.
- * Corre cada 2 minutos.
+ * Corre cada 10 minutos.
  */
 function startAssignmentJob() {
-  cron.schedule('*/2 * * * *', async () => {
+  cron.schedule('*/10 * * * *', async () => {
     if (jobRunning) {
       console.warn('[assignment.job] Ejecución anterior aún activa — tick omitido');
       return;
@@ -275,7 +275,7 @@ function startAssignmentJob() {
     }
   });
 
-  console.log('[assignment.job] Job de asignación automática activo (cada 2 min)');
+  console.log('[assignment.job] Job de asignación automática activo (cada 10 min)');
 }
 
 module.exports = { startAssignmentJob, runAssignmentJob, runAutoValidationJob, runReasignacionJob };
