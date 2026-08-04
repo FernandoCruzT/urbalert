@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const { db }  = require('../database/connection');
 const { isValidEmail, isValidPhone, isValidName, PASSWORD_MIN_LENGTH } = require('../utils/validators');
 const { sendWelcomeAuthority } = require('../services/mail.service');
+const { createNotification } = require('../services/notification.service');
 
 // ─── createAuthority ─────────────────────────────────────────────────────────
 
@@ -252,8 +253,10 @@ async function updateAuthority(req, res) {
   }
 
   try {
-    await db.tx(async (t) => {
-      const autoridad = await t.oneOrNone(`SELECT id FROM autoridad WHERE id = $1`, id);
+    const result = await db.tx(async (t) => {
+      const autoridad = await t.oneOrNone(
+        `SELECT id, categoria_id, municipio FROM autoridad WHERE id = $1`, id
+      );
       if (!autoridad) throw { status: 404, message: 'Autoridad no encontrada' };
 
       if (categoria_id) {
@@ -261,18 +264,92 @@ async function updateAuthority(req, res) {
         if (!cat) throw { status: 404, message: 'Categoría no encontrada' };
       }
 
-      await t.none(
+      const actualizada = await t.one(
         `UPDATE autoridad
          SET categoria_id = COALESCE($1, categoria_id),
              municipio    = COALESCE($2, municipio),
              departamento = COALESCE($3, departamento)
-         WHERE id = $4`,
+         WHERE id = $4
+         RETURNING id, categoria_id, municipio, departamento, carga_ponderada, reportes_activos, activo`,
         [categoria_id || null, municipio || null,
          departamento !== undefined ? departamento.trim() : null, id]
       );
+
+      let reportesReasignados = 0;
+
+      // Si cambió la categoría, los reportes activos que ya no correspondan
+      // a la nueva categoría de la autoridad deben reasignarse.
+      if (categoria_id && categoria_id !== autoridad.categoria_id) {
+        const atascados = await t.any(
+          `SELECT r.id, r.categoria_id, r.estado, c.usuario_id AS ciudadano_usuario_id
+           FROM reporte r
+           JOIN ciudadano c ON c.id = r.ciudadano_id
+           WHERE r.autoridad_id = $1
+             AND r.estado IN ('asignado', 'en_proceso')
+             AND r.categoria_id != $2`,
+          [id, categoria_id]
+        );
+
+        for (const r of atascados) {
+          const nueva = await t.oneOrNone(
+            `SELECT a.id, a.usuario_id
+             FROM autoridad a
+             WHERE a.categoria_id = $1
+               AND a.activo = TRUE
+               AND a.id != $2
+               AND LOWER(a.municipio) = LOWER($3)
+             ORDER BY a.carga_ponderada ASC, a.reportes_activos ASC
+             LIMIT 1`,
+            [r.categoria_id, id, autoridad.municipio]
+          );
+
+          if (nueva) {
+            await t.none(
+              `UPDATE reporte SET autoridad_id = $1, updated_at = NOW() WHERE id = $2`,
+              [nueva.id, r.id]
+            );
+
+            await t.none(
+              `INSERT INTO historial_estado
+                 (reporte_id, usuario_id, rol_usuario, estado_anterior, estado_nuevo, observacion)
+               VALUES ($1, NULL, 'sistema', $2, $2,
+                       'Reasignado automáticamente por cambio de categoría de la autoridad anterior')`,
+              [r.id, r.estado]
+            );
+
+            await createNotification(
+              r.ciudadano_usuario_id, r.id,
+              'Reporte reasignado',
+              'Tu reporte ha sido reasignado a una nueva autoridad',
+              t
+            );
+          } else {
+            await t.none(
+              `UPDATE reporte SET autoridad_id = NULL, estado = 'pendiente', updated_at = NOW() WHERE id = $1`,
+              [r.id]
+            );
+
+            await t.none(
+              `INSERT INTO historial_estado
+                 (reporte_id, usuario_id, rol_usuario, estado_anterior, estado_nuevo, observacion)
+               VALUES ($1, NULL, 'sistema', $2, 'pendiente',
+                       'Sin autoridad disponible tras cambio de categoría — reporte liberado para reasignación automática')`,
+              [r.id, r.estado]
+            );
+          }
+
+          reportesReasignados++;
+        }
+      }
+
+      return { autoridad: actualizada, reportesReasignados };
     });
 
-    return res.json({ message: 'Autoridad actualizada correctamente' });
+    return res.json({
+      message: 'Autoridad actualizada correctamente',
+      ...result.autoridad,
+      reportes_reasignados: result.reportesReasignados,
+    });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ message: err.message });
     console.error('[users.updateAuthority]', err);

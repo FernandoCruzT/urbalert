@@ -327,7 +327,7 @@ function EditAutoridad({ autoridadId }) {
     try {
       const cat = categorias.find(c => c.id === categoriaSel);
       const depto = cat ? CATEGORIA_DEPTO[cat.nombre] : null;
-      await api.patch(`/users/authority/${autoridadId}`, {
+      const { data: resp } = await api.patch(`/users/authority/${autoridadId}`, {
         categoria_id: categoriaSel,
         ...(depto ? { departamento: depto } : {}),
       });
@@ -340,6 +340,11 @@ function EditAutoridad({ autoridadId }) {
       if (depto) setDeptoSel(depto);
       setNotice(depto ? 'Categoría y departamento actualizados' : 'Categoría actualizada correctamente');
       setModal(null);
+      if (resp?.reportes_reasignados > 0) {
+        window.alert(
+          `Se reasignaron ${resp.reportes_reasignados} reportes activos que ya no correspondían a la nueva categoría de esta autoridad.`
+        );
+      }
     } catch (err) {
       setError(err?.response?.data?.message || 'Error al actualizar la categoría');
     } finally { setBusy(false); }
