@@ -37,7 +37,11 @@ export default function LoginScreen({ navigation }) {
         );
       }
     } catch (err) {
-      Alert.alert('Error al iniciar sesión', err.message);
+      if (err.data?.email_no_verificado === true) {
+        navigation.navigate('VerifyEmail', { email: err.data.email });
+      } else {
+        Alert.alert('Error al iniciar sesión', err.message);
+      }
     } finally {
       setLoading(false);
     }

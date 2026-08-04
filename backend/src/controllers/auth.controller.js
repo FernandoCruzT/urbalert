@@ -198,7 +198,7 @@ async function login(req, res) {
     const result = await db.task(async (t) => {
       const usuario = await t.oneOrNone(
         `SELECT id, nombre, apellido, email, telefono, password_hash, rol,
-                requiere_cambio_password, created_at
+                requiere_cambio_password, email_verificado, created_at
          FROM usuario WHERE email = $1`,
         email.toLowerCase().trim()
       );
@@ -206,6 +206,15 @@ async function login(req, res) {
 
       const passwordOk = await bcrypt.compare(password, usuario.password_hash);
       if (!passwordOk) throw { status: 401, message: 'Credenciales incorrectas' };
+
+      if (usuario.rol === 'ciudadano' && !usuario.email_verificado) {
+        throw {
+          status: 403,
+          message: 'Correo no verificado',
+          email_no_verificado: true,
+          email: usuario.email,
+        };
+      }
 
       const perfil = await fetchProfile(t, usuario);
       return { usuario, perfil };
@@ -231,7 +240,10 @@ async function login(req, res) {
       },
     });
   } catch (err) {
-    if (err.status) return res.status(err.status).json({ message: err.message });
+    if (err.status) {
+      const { status, ...body } = err;
+      return res.status(status).json(body);
+    }
     console.error('[login]', err);
     return res.status(500).json({ message: 'Error interno del servidor' });
   }
