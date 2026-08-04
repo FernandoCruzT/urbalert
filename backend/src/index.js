@@ -25,6 +25,23 @@ const loginLimiter = rateLimit({
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+// TEMPORAL — diagnóstico de envío de correo vía Resend. Remover tras depurar.
+app.get('/test-mail', async (req, res) => {
+  try {
+    const { Resend } = require('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const result = await resend.emails.send({
+      from: process.env.MAIL_FROM || 'Urbalert <noreply@urbalert.site>',
+      to: ['cruzfernando3b46@gmail.com'],
+      subject: 'Test Urbalert',
+      html: '<p>Test de correo desde Railway</p>'
+    });
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.json({ ok: false, error: err.message, detail: JSON.stringify(err) });
+  }
+});
+
 // Routes
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth', require('./routes/auth'));
