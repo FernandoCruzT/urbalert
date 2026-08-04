@@ -9,6 +9,7 @@ const { startAssignmentJob } = require('./jobs/assignment.job');
 const { startReminderJob }   = require('./jobs/reminder.job');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 4000;
 
 app.use(helmet());
