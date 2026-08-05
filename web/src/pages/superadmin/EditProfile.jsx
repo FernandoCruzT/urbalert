@@ -23,6 +23,7 @@ const S = {
   // Botones de acción
   btn:        { padding: '0.42rem 0.8rem', border: '1px solid #D1D5DB', borderRadius: 'var(--radius-sm)', background: '#fff', fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' },
   btnDanger:  { padding: '0.42rem 0.8rem', border: '1px solid #FCA5A5', borderRadius: 'var(--radius-sm)', background: '#FEF2F2', fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', color: '#B91C1C', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' },
+  btnSuccess: { padding: '0.42rem 0.8rem', border: '1px solid #86EFAC', borderRadius: 'var(--radius-sm)', background: '#F0FDF4', fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', color: '#166534', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' },
   btnPrimary: { padding: '0.42rem 0.8rem', border: 'none', borderRadius: 'var(--radius-sm)', background: 'var(--color-primary)', fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', color: '#fff', fontWeight: 600 },
   btnSecondary:{ padding: '0.42rem 0.8rem', border: '1px solid #D1D5DB', borderRadius: 'var(--radius-sm)', background: '#fff', fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--color-text)' },
   // Dropdown
@@ -375,6 +376,17 @@ function EditAutoridad({ autoridadId }) {
     } finally { setBusy(false); }
   }
 
+  async function handleReactivate() {
+    setBusy(true);
+    try {
+      await api.patch(`/users/authority/${autoridadId}/reactivate`);
+      setData(prev => ({ ...prev, activo: true }));
+      setNotice('Autoridad reactivada correctamente');
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Error al reactivar la cuenta');
+    } finally { setBusy(false); }
+  }
+
   if (loading) return <div style={S.centered}>Cargando…</div>;
   if (error && !data) return <div style={{ ...S.centered, color: '#B91C1C' }}>{error}</div>;
 
@@ -426,9 +438,13 @@ function EditAutoridad({ autoridadId }) {
           <button style={S.btn} onClick={() => { setMunicipioSel(data.municipio || ''); setModal('municipio'); }}>
             Cambiar municipio
           </button>
-          {data.activo !== false && (
+          {data.activo !== false ? (
             <button style={S.btnDanger} onClick={() => setModal('borrar')}>
               Borrar cuenta
+            </button>
+          ) : (
+            <button style={S.btnSuccess} onClick={handleReactivate} disabled={busy}>
+              {busy ? 'Procesando…' : 'Reactivar cuenta'}
             </button>
           )}
         </div>
@@ -578,6 +594,17 @@ function EditSuperadmin({ superadminId }) {
     } finally { setBusy(false); }
   }
 
+  async function handleReactivate() {
+    setBusy(true);
+    try {
+      await api.patch(`/users/superadmin/${superadminId}/reactivate`);
+      setData(prev => ({ ...prev, activo: true }));
+      setNotice('Cuenta reactivada correctamente');
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Error al reactivar la cuenta');
+    } finally { setBusy(false); }
+  }
+
   if (loading) return <div style={S.centered}>Cargando…</div>;
   if (error && !data) return <div style={{ ...S.centered, color: '#B91C1C' }}>{error}</div>;
 
@@ -614,9 +641,13 @@ function EditSuperadmin({ superadminId }) {
           </span>
         </div>
         <div style={S.actions}>
-          {data.activo !== false && (
+          {data.activo !== false ? (
             <button style={S.btnDanger} onClick={() => setModal('borrar')}>
               Borrar cuenta
+            </button>
+          ) : (
+            <button style={S.btnSuccess} onClick={handleReactivate} disabled={busy}>
+              {busy ? 'Procesando…' : 'Reactivar cuenta'}
             </button>
           )}
         </div>

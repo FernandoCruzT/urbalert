@@ -409,6 +409,29 @@ async function deactivateAuthority(req, res) {
   }
 }
 
+// ─── reactivateAuthority ─────────────────────────────────────────────────────
+
+/**
+ * PATCH /api/users/authority/:id/reactivate
+ * Reactiva una autoridad previamente desactivada (activo = TRUE).
+ */
+async function reactivateAuthority(req, res) {
+  const { id } = req.params;
+
+  try {
+    const autoridad = await db.oneOrNone(`SELECT id, activo FROM autoridad WHERE id = $1`, id);
+    if (!autoridad) return res.status(404).json({ message: 'Autoridad no encontrada' });
+    if (autoridad.activo) return res.status(409).json({ message: 'La autoridad ya está activa' });
+
+    await db.none(`UPDATE autoridad SET activo = TRUE WHERE id = $1`, id);
+
+    return res.json({ message: 'Autoridad reactivada correctamente' });
+  } catch (err) {
+    console.error('[users.reactivateAuthority]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
 // ─── listSuperadmins ─────────────────────────────────────────────────────────
 
 /**
@@ -473,4 +496,33 @@ async function deactivateSuperadmin(req, res) {
   }
 }
 
-module.exports = { createAuthority, listAuthorities, getCitizen, suspendCitizen, listCitizens, listMunicipios, updateAuthority, deactivateAuthority, listSuperadmins, deactivateSuperadmin };
+// ─── reactivateSuperadmin ────────────────────────────────────────────────────
+
+/**
+ * PATCH /api/users/superadmin/:id/reactivate
+ * Reactiva una cuenta de superadmin previamente desactivada (activo = TRUE en usuario).
+ */
+async function reactivateSuperadmin(req, res) {
+  const { id } = req.params;
+
+  try {
+    const superadmin = await db.oneOrNone(
+      `SELECT s.id, s.usuario_id, u.activo
+       FROM superadmin s
+       JOIN usuario u ON u.id = s.usuario_id
+       WHERE s.id = $1`,
+      id
+    );
+    if (!superadmin) return res.status(404).json({ message: 'Cuenta de superadmin no encontrada' });
+    if (superadmin.activo) return res.status(409).json({ message: 'La cuenta ya está activa' });
+
+    await db.none(`UPDATE usuario SET activo = TRUE WHERE id = $1`, superadmin.usuario_id);
+
+    return res.json({ message: 'Cuenta reactivada correctamente' });
+  } catch (err) {
+    console.error('[users.reactivateSuperadmin]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+module.exports = { createAuthority, listAuthorities, getCitizen, suspendCitizen, listCitizens, listMunicipios, updateAuthority, deactivateAuthority, reactivateAuthority, listSuperadmins, deactivateSuperadmin, reactivateSuperadmin };
