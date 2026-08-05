@@ -11,8 +11,18 @@ function signToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 }
 
-/** Devuelve el perfil de rol y valida restricciones según el rol del usuario. */
+/**
+ * Devuelve el perfil de rol y valida restricciones según el rol del usuario.
+ * Se llama después de confirmar email + contraseña correctos (login) o con un
+ * JWT ya validado (me), nunca antes — así activo=false nunca se confunde con
+ * "credenciales incorrectas".
+ */
 async function fetchProfile(t, usuario) {
+  // usuario.activo aplica a los tres roles por igual (columna en la tabla usuario).
+  if (!usuario.activo) {
+    throw { status: 403, message: 'Cuenta desactivada. Contacta al administrador del sistema.' };
+  }
+
   switch (usuario.rol) {
     case 'ciudadano': {
       const perfil = await t.oneOrNone(
@@ -35,11 +45,14 @@ async function fetchProfile(t, usuario) {
         usuario.id
       );
       if (!perfil) throw { status: 404, message: 'Perfil de autoridad no encontrado' };
-      if (!perfil.activo) throw { status: 403, message: 'Cuenta desactivada' };
+      // autoridad.activo es un flag independiente de usuario.activo — lo pone
+      // deactivateAuthority() y es la vía real por la que se desactiva hoy una autoridad.
+      if (!perfil.activo) {
+        throw { status: 403, message: 'Cuenta desactivada. Contacta al administrador del sistema.' };
+      }
       return perfil;
     }
     case 'superadmin': {
-      if (!usuario.activo) throw { status: 403, message: 'Cuenta desactivada' };
       const perfil = await t.oneOrNone(
         'SELECT id FROM superadmin WHERE usuario_id = $1',
         usuario.id
