@@ -366,7 +366,9 @@ function EditAutoridad({ autoridadId }) {
     setBusy(true);
     try {
       await api.delete(`/users/authority/${autoridadId}`);
-      navigate('/superadmin/users');
+      setData(prev => ({ ...prev, activo: false }));
+      setNotice('Cuenta desactivada correctamente. Sus reportes activos fueron liberados para reasignación automática.');
+      setModal(null);
     } catch (err) {
       setError(err?.response?.data?.message || 'Error al borrar la cuenta');
       setModal(null);
@@ -403,7 +405,10 @@ function EditAutoridad({ autoridadId }) {
             {data.email}<br />
             {data.telefono || 'Sin teléfono'}
           </div>
-          <span style={S.rolBadge}>Autoridad</span>
+          <span style={S.rolBadge}>Autoridad</span>{' '}
+          <span style={data.activo === false ? S.badge('suspendida') : S.badge('activa')}>
+            {data.activo === false ? 'Inactiva' : 'Activa'}
+          </span>
         </div>
         <div style={S.actions}>
           <Dropdown
@@ -421,9 +426,11 @@ function EditAutoridad({ autoridadId }) {
           <button style={S.btn} onClick={() => { setMunicipioSel(data.municipio || ''); setModal('municipio'); }}>
             Cambiar municipio
           </button>
-          <button style={S.btnDanger} onClick={() => setModal('borrar')}>
-            Borrar cuenta
-          </button>
+          {data.activo !== false && (
+            <button style={S.btnDanger} onClick={() => setModal('borrar')}>
+              Borrar cuenta
+            </button>
+          )}
         </div>
       </div>
 
@@ -536,6 +543,103 @@ function EditAutoridad({ autoridadId }) {
   );
 }
 
+// ── Perfil Superadmin ─────────────────────────────────────────────────────────
+
+function EditSuperadmin({ superadminId }) {
+  const navigate = useNavigate();
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+  const [notice,  setNotice]  = useState('');
+  const [modal,   setModal]   = useState(null); // 'borrar'
+  const [busy,    setBusy]    = useState(false);
+
+  useEffect(() => {
+    api.get('/users/superadmins')
+      .then(({ data: d }) => {
+        const found = (d.superadmins || []).find(s => String(s.id) === String(superadminId));
+        if (!found) { setError('Superadmin no encontrado'); return; }
+        setData(found);
+      })
+      .catch(() => setError('No se pudo cargar el perfil del superadmin'))
+      .finally(() => setLoading(false));
+  }, [superadminId]);
+
+  async function handleDelete() {
+    setBusy(true);
+    try {
+      await api.delete(`/users/superadmin/${superadminId}`);
+      setData(prev => ({ ...prev, activo: false }));
+      setNotice('Cuenta desactivada correctamente');
+      setModal(null);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Error al borrar la cuenta');
+      setModal(null);
+    } finally { setBusy(false); }
+  }
+
+  if (loading) return <div style={S.centered}>Cargando…</div>;
+  if (error && !data) return <div style={{ ...S.centered, color: '#B91C1C' }}>{error}</div>;
+
+  const initials = data
+    ? `${data.nombre?.[0] || ''}${data.apellido?.[0] || ''}`.toUpperCase()
+    : '?';
+
+  return (
+    <div style={S.page}>
+      {/* Header */}
+      <div style={S.header}>
+        <h2 style={S.title}>Edición de perfiles</h2>
+        <span style={S.subtitle}>(previa selección en búsqueda)</span>
+        <button style={S.backBtn} onClick={() => navigate('/superadmin/users')}>
+          <FiChevronLeft size={13} /> Regresar
+        </button>
+      </div>
+
+      {notice && <div style={S.sucBanner}>{notice}</div>}
+      {error  && <div style={S.errBanner}>{error}</div>}
+
+      {/* Card */}
+      <div style={S.card}>
+        <div style={S.avatar}>{initials}</div>
+        <div style={S.info}>
+          <div style={S.name}>{data.nombre} {data.apellido}</div>
+          <div style={S.meta}>
+            {data.email}<br />
+            {data.telefono || 'Sin teléfono'}
+          </div>
+          <span style={S.rolBadge}>Superadmin</span>{' '}
+          <span style={data.activo === false ? S.badge('suspendida') : S.badge('activa')}>
+            {data.activo === false ? 'Inactiva' : 'Activa'}
+          </span>
+        </div>
+        <div style={S.actions}>
+          {data.activo !== false && (
+            <button style={S.btnDanger} onClick={() => setModal('borrar')}>
+              Borrar cuenta
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Modal borrar */}
+      {modal === 'borrar' && (
+        <Modal title="Borrar cuenta" onClose={() => setModal(null)}>
+          <p style={S.modalText}>
+            ¿Estás seguro que deseas borrar la cuenta de superadmin de <strong>{data.nombre} {data.apellido}</strong>?
+          </p>
+          <div style={S.modalRow}>
+            <button style={S.btnSecondary} onClick={() => setModal(null)}>Cancelar</button>
+            <button style={{ ...S.btnPrimary, background: '#B91C1C' }} onClick={handleDelete} disabled={busy}>
+              {busy ? 'Procesando…' : 'Aceptar'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export default function EditProfile() {
@@ -543,10 +647,9 @@ export default function EditProfile() {
 
   return (
     <SuperadminLayout>
-      {tipo === 'ciudadano'
-        ? <EditCiudadano usuarioId={id} />
-        : <EditAutoridad autoridadId={id} />
-      }
+      {tipo === 'ciudadano'  && <EditCiudadano usuarioId={id} />}
+      {tipo === 'autoridad'  && <EditAutoridad autoridadId={id} />}
+      {tipo === 'superadmin' && <EditSuperadmin superadminId={id} />}
     </SuperadminLayout>
   );
 }

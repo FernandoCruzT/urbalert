@@ -615,48 +615,57 @@ async function authorityReports(req, res) {
  * GET /api/reports/by-colonia
  * Lista reportes de una colonia aplicando filtros opcionales.
  * Query params:
- *   colonia      (string, requerido)
+ *   colonia_id   (uuid, preferido) — identifica un polígono exacto de colonia_poligono
+ *   colonia      (string, requerido si no hay colonia_id) — fallback por texto,
+ *                para reportes sin colonia_poligono_id
  *   municipio    (string, opcional) — distingue colonias homónimas entre municipios
+ *                cuando se filtra por texto (colonia)
  *   estado       abiertos | cerrados | todos  (default: abiertos)
  *   categoria_id (uuid, opcional)
  *   mine         true | false — si true, filtra por autoridad autenticada
  *
- * La tabla reporte no tiene columna municipio, por eso se hace LEFT JOIN a
- * colonia_poligono (que sí la tiene). Reportes sin colonia_poligono_id solo
- * pueden filtrar por nombre de colonia, no por municipio.
+ * colonia_id filtra por r.colonia_poligono_id directamente, sin ambigüedad
+ * entre colonias homónimas. El fallback por texto (colonia/municipio) existe
+ * solo para reportes antiguos sin colonia_poligono_id.
  */
 async function byColonia(req, res) {
-  const { colonia, municipio, estado = 'abiertos', categoria_id, mine } = req.query;
+  const { colonia, colonia_id, municipio, estado = 'abiertos', categoria_id, mine } = req.query;
 
-  if (!colonia) return res.status(400).json({ message: 'Falta parámetro colonia' });
+  if (!colonia && !colonia_id) {
+    return res.status(400).json({ message: 'Falta parámetro colonia_id o colonia' });
+  }
 
   const ESTADOS_ABIERTOS = ['enviado','en_validacion','en_revision','pendiente','asignado','en_proceso'];
   const ESTADOS_CERRADOS = ['resuelto','cerrado'];
 
   try {
-    const params = [colonia];
-    let idx = 2;
+    const params = [];
+    let idx = 1;
 
-    // Filtro de colonia: con o sin municipio, usando colonia_poligono cuando existe
+    // Filtro de colonia: por id (exacto) o por texto/municipio (fallback legado)
     let coloniaWhere;
-    if (municipio) {
+    if (colonia_id) {
+      coloniaWhere = `r.colonia_poligono_id = $${idx}::uuid`;
+      params.push(colonia_id); idx++;
+    } else if (municipio) {
       // Reportes con polígono: nombre Y municipio del polígono deben coincidir
       // Reportes sin polígono: solo nombre (no podemos discriminar por municipio)
       coloniaWhere = `(
         (r.colonia_poligono_id IS NOT NULL
-         AND LOWER(cp.nombre)     = LOWER($1)
-         AND LOWER(cp.municipio)  = LOWER($${idx}))
+         AND LOWER(cp.nombre)     = LOWER($${idx})
+         AND LOWER(cp.municipio)  = LOWER($${idx + 1}))
         OR
         (r.colonia_poligono_id IS NULL
-         AND LOWER(r.colonia) = LOWER($1))
+         AND LOWER(r.colonia) = LOWER($${idx}))
       )`;
-      params.push(municipio); idx++;
+      params.push(colonia, municipio); idx += 2;
     } else {
       coloniaWhere = `(
-        (r.colonia_poligono_id IS NOT NULL AND LOWER(cp.nombre) = LOWER($1))
+        (r.colonia_poligono_id IS NOT NULL AND LOWER(cp.nombre) = LOWER($${idx}))
         OR
-        (r.colonia_poligono_id IS NULL     AND LOWER(r.colonia) = LOWER($1))
+        (r.colonia_poligono_id IS NULL     AND LOWER(r.colonia) = LOWER($${idx}))
       )`;
+      params.push(colonia); idx++;
     }
 
     const conditions = [coloniaWhere];

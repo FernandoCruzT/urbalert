@@ -277,17 +277,19 @@ function Dropdown({ label, options, value, onChange, disabled }) {
 }
 
 /* ── applyStyles ──
-   municipioLookup: { colonia_nombre_lowercase → municipio_nombre } cargado desde /api/heatmap/municipios.
+   lookup e municipioLookup están indexados por colonia_id (id único del polígono,
+   no por nombre) porque hay colonias homónimas — ej. "La Guadalupana" existe como
+   4 polígonos distintos — y matchear por texto pintaba todos los homónimos a la vez.
+   municipioLookup: { colonia_id → { nombre, municipio } } cargado desde /api/heatmap/municipios.
    Cuando activeMunicipio está activo, la membresía se determina por municipioLookup (no por presencia
    en el lookup de datos), por lo que colonias del municipio sin reportes también reciben borde azul. */
 function applyStyles(dataLayer, lookup, metrica, activeMunicipio, municipioLookup, maxReportes) {
   dataLayer.setStyle((feature) => {
-    const nombre       = feature.getProperty('nombre');
-    const key          = nombre?.toLowerCase().trim();
-    const data         = lookup[key];
+    const id           = feature.getId();
+    const data         = lookup[id];
     const color        = coloniaColor(data, metrica, maxReportes);
     const inMunicipio  = activeMunicipio
-      ? (municipioLookup[key] === activeMunicipio)
+      ? (municipioLookup[id]?.municipio === activeMunicipio)
       : true;
 
     if (!color) {
@@ -328,13 +330,12 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
   useEffect(() => { onColoniaClickRef.current = onColoniaClick; }, [onColoniaClick]);
   useEffect(() => { maxReportesRef.current = maxReportes; }, [maxReportes]);
 
-  /* Construir lookup normalizado: nombre → { total, peso_total } */
+  /* Construir lookup: colonia_id → { total, peso_total } */
   const lookup = useRef({});
   useEffect(() => {
     const map = {};
     coloniaData.forEach(c => {
-      const key = c.colonia?.toLowerCase().trim();
-      if (key) map[key] = c;
+      if (c.colonia_id) map[c.colonia_id] = c;
     });
     lookup.current = map;
   }, [coloniaData]);
@@ -351,9 +352,9 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
     });
 
     dataLayer.addListener('mouseover', (event) => {
+      const id     = event.feature.getId();
       const nombre = event.feature.getProperty('nombre');
-      const key    = nombre?.toLowerCase().trim();
-      const data   = lookup.current[key];
+      const data   = lookup.current[id];
       map.setOptions({ draggableCursor: 'pointer' });
       const latLng = event.latLng;
       const proj   = map.getProjection();
@@ -378,9 +379,10 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
     });
 
     dataLayer.addListener('click', (event) => {
+      const id        = event.feature.getId();
       const nombre    = event.feature.getProperty('nombre');
       const municipio = event.feature.getProperty('municipio');
-      if (nombre) onColoniaClickRef.current?.(nombre, municipio);
+      if (id) onColoniaClickRef.current?.(id, nombre, municipio);
     });
   }, []);
 
@@ -481,13 +483,7 @@ export default function SuperadminHeatmap() {
 
   useEffect(() => {
     api.get('/heatmap/municipios')
-      .then(({ data }) => {
-        const normalized = {};
-        Object.entries(data).forEach(([k, v]) => {
-          normalized[k.toLowerCase().trim()] = v;
-        });
-        municipioLookupRef.current = normalized;
-      })
+      .then(({ data }) => { municipioLookupRef.current = data; })
       .catch(() => {});
   }, []);
 
@@ -560,10 +556,9 @@ export default function SuperadminHeatmap() {
   useDidUpdateEffect(() => showToast(categoriaNombre ? `Categoría: ${categoriaNombre}` : 'Sin filtro de categoría'), [categoriaId]);
   useDidUpdateEffect(() => showToast(`Métrica: ${metrica}`),                                                  [metrica]);
 
-  const handleColoniaClick = useCallback((nombre, municipio) => {
+  const handleColoniaClick = useCallback((coloniaId, nombre, municipio) => {
     setDrawer({ open:true, colonia:nombre, municipio: municipio || null, reportes:[], loading:true, expandedId:null });
-    const params = { colonia: nombre, estado };
-    if (municipio)   params.municipio    = municipio;
+    const params = { colonia_id: coloniaId, estado };
     if (categoriaId) params.categoria_id = categoriaId;
     api.get('/reports/by-colonia', { params })
       .then(({ data }) => setDrawer(d => ({ ...d, loading:false, reportes: data.reportes || [] })))
@@ -577,10 +572,10 @@ export default function SuperadminHeatmap() {
 
   function openColoniaModal() {
     if (!municipio) return;
-    const list = Object.entries(municipioLookupRef.current)
-      .filter(([, m]) => m === municipio)
-      .map(([colonia]) => colonia.replace(/(?:^|\s|-)\S/g, c => c.toUpperCase()))
-      .sort();
+    const nombres = Object.values(municipioLookupRef.current)
+      .filter(v => v.municipio === municipio)
+      .map(v => v.nombre);
+    const list = [...new Set(nombres)].sort();
     setColoniaListForSector(list);
     setColoniaModal(true);
   }

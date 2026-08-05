@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { db }  = require('../database/connection');
-const { isValidEmail, isValidPhone, isValidName, PASSWORD_MIN_LENGTH } = require('../utils/validators');
+const { isValidEmail, isValidPhone, isValidName } = require('../utils/validators');
 const { sendWelcomeAuthority } = require('../services/mail.service');
 const { createNotification } = require('../services/notification.service');
 
@@ -29,8 +29,6 @@ async function createAuthority(req, res) {
     return res.status(400).json({ message: 'Formato de correo inválido' });
   if (telefono?.trim() && !isValidPhone(telefono))
     return res.status(400).json({ message: 'El teléfono debe tener 10 dígitos' });
-  if (password.length < PASSWORD_MIN_LENGTH)
-    return res.status(400).json({ message: `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres` });
   if (!MUNICIPIOS_VALIDOS.includes(municipio))
     return res.status(400).json({ message: `Municipio inválido. Opciones: ${MUNICIPIOS_VALIDOS.join(', ')}` });
 
@@ -411,4 +409,68 @@ async function deactivateAuthority(req, res) {
   }
 }
 
-module.exports = { createAuthority, listAuthorities, getCitizen, suspendCitizen, listCitizens, listMunicipios, updateAuthority, deactivateAuthority };
+// ─── listSuperadmins ─────────────────────────────────────────────────────────
+
+/**
+ * GET /api/users/superadmins
+ * Lista todas las cuentas con rol='superadmin'.
+ */
+async function listSuperadmins(req, res) {
+  try {
+    const superadmins = await db.any(
+      `SELECT s.id, u.nombre, u.apellido, u.email, u.telefono, u.activo
+       FROM superadmin s
+       JOIN usuario u ON u.id = s.usuario_id
+       ORDER BY u.apellido ASC, u.nombre ASC`
+    );
+    return res.json({ total: superadmins.length, superadmins });
+  } catch (err) {
+    console.error('[users.listSuperadmins]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+// ─── deactivateSuperadmin ────────────────────────────────────────────────────
+
+/**
+ * DELETE /api/users/superadmin/:id
+ * Cualquier superadmin autenticado puede desactivar la cuenta de otro
+ * (activo = FALSE en usuario), simétrico a cómo un superadmin puede crear
+ * a otro. :id es el id de la fila superadmin, no de usuario.
+ * No se permite desactivar al último superadmin activo, para evitar dejar
+ * el sistema sin ninguna cuenta administradora funcional.
+ */
+async function deactivateSuperadmin(req, res) {
+  const { id } = req.params;
+
+  try {
+    const superadmin = await db.oneOrNone(
+      `SELECT s.id, s.usuario_id, u.activo
+       FROM superadmin s
+       JOIN usuario u ON u.id = s.usuario_id
+       WHERE s.id = $1`,
+      id
+    );
+    if (!superadmin) return res.status(404).json({ message: 'Cuenta de superadmin no encontrada' });
+    if (!superadmin.activo) return res.status(409).json({ message: 'La cuenta ya está desactivada' });
+
+    const { count } = await db.one(
+      `SELECT COUNT(*)::int AS count
+       FROM superadmin s
+       JOIN usuario u ON u.id = s.usuario_id
+       WHERE u.activo = TRUE`
+    );
+    if (count <= 1) {
+      return res.status(409).json({ message: 'No puedes desactivar al último superadmin activo' });
+    }
+
+    await db.none(`UPDATE usuario SET activo = FALSE WHERE id = $1`, superadmin.usuario_id);
+
+    return res.json({ message: 'Cuenta desactivada correctamente' });
+  } catch (err) {
+    console.error('[users.deactivateSuperadmin]', err);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+module.exports = { createAuthority, listAuthorities, getCitizen, suspendCitizen, listCitizens, listMunicipios, updateAuthority, deactivateAuthority, listSuperadmins, deactivateSuperadmin };

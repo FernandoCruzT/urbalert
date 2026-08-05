@@ -2,6 +2,11 @@
  * Seed: inserta las colonias del GeoJSON oficial (IIEG 2024) en colonia_poligono.
  * - Asigna sector según posición del centroide (calculado por PostGIS)
  * - Es idempotente: trunca y re-inserta en cada ejecución
+ * - Inserta colonia_poligono.id usando el mismo UUID que trae feature.id en el
+ *   GeoJSON (ver assign-geojson-ids.js), para que cada polígono tenga una
+ *   correspondencia 1:1 explícita entre archivo y base de datos — antes el
+ *   match con el frontend se hacía por nombre de texto, lo que pintaba todas
+ *   las colonias homónimas (ej. "La Guadalupana" ×4) al recibir un solo reporte.
  *
  * Uso: node backend/scripts/seed-colonias-postgis.js
  */
@@ -97,7 +102,9 @@ function toMultiPolygonWKT(geometry) {
     for (let i = 0; i < features.length; i += BATCH) {
       const batch = features.slice(i, i + BATCH);
       await db.tx(async (t) => {
-        for (const feat of batch) {
+    for (const feat of batch) {
+          if (!feat.id) { conteo.errores++; continue; }
+
           const { nombre, municipio, cp } = feat.properties;
           const wkt = toMultiPolygonWKT(feat.geometry);
           if (!wkt) { conteo.errores++; continue; }
@@ -110,9 +117,9 @@ function toMultiPolygonWKT(geometry) {
           conteo[rule.nombre]++;
 
           await t.none(
-            `INSERT INTO colonia_poligono (nombre, municipio, cp, sector_id, geom)
-             VALUES ($1, $2, $3, $4, ST_GeomFromText($5, 4326))`,
-            [nombre, municipio || null, cp || null, sector_id, wkt]
+            `INSERT INTO colonia_poligono (id, nombre, municipio, cp, sector_id, geom)
+             VALUES ($1, $2, $3, $4, $5, ST_GeomFromText($6, 4326))`,
+            [feat.id, nombre, municipio || null, cp || null, sector_id, wkt]
           );
           insertadas++;
         }

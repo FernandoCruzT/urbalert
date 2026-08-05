@@ -28,16 +28,18 @@ async function fetchProfile(t, usuario) {
     case 'autoridad': {
       const perfil = await t.oneOrNone(
         `SELECT a.id, a.departamento, a.municipio, a.carga_ponderada, a.reportes_activos,
-                a.categoria_id, c.nombre AS categoria_nombre
+                a.categoria_id, a.activo, c.nombre AS categoria_nombre
          FROM autoridad a
          LEFT JOIN categoria c ON c.id = a.categoria_id
          WHERE a.usuario_id = $1`,
         usuario.id
       );
       if (!perfil) throw { status: 404, message: 'Perfil de autoridad no encontrado' };
+      if (!perfil.activo) throw { status: 403, message: 'Cuenta desactivada' };
       return perfil;
     }
     case 'superadmin': {
+      if (!usuario.activo) throw { status: 403, message: 'Cuenta desactivada' };
       const perfil = await t.oneOrNone(
         'SELECT id FROM superadmin WHERE usuario_id = $1',
         usuario.id
@@ -198,7 +200,7 @@ async function login(req, res) {
     const result = await db.task(async (t) => {
       const usuario = await t.oneOrNone(
         `SELECT id, nombre, apellido, email, telefono, password_hash, rol,
-                requiere_cambio_password, email_verificado, created_at
+                requiere_cambio_password, email_verificado, activo, created_at
          FROM usuario WHERE email = $1`,
         email.toLowerCase().trim()
       );
@@ -259,7 +261,7 @@ async function me(req, res) {
   try {
     const result = await db.task(async (t) => {
       const usuario = await t.oneOrNone(
-        `SELECT id, nombre, apellido, email, telefono, rol, created_at
+        `SELECT id, nombre, apellido, email, telefono, rol, activo, created_at
          FROM usuario WHERE id = $1`,
         req.user.id
       );

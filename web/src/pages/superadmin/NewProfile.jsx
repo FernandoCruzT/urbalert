@@ -108,8 +108,11 @@ export default function NewProfile() {
     else if (!EMAIL_RE.test(form.email))          errs.email    = 'Email inválido';
     if (form.telefono.trim() && !/^\d{10}$/.test(form.telefono.replace(/[\s\-().]/g, '')))
       errs.telefono = 'Debe tener 10 dígitos';
-    if (!form.password)        errs.password = 'Campo obligatorio';
-    else if (form.password.length < 8)            errs.password = 'Mínimo 8 caracteres';
+    if (!form.password) errs.password = 'Campo obligatorio';
+    // La autoridad es forzada a cambiar esta contraseña temporal en su primer
+    // login (requiere_cambio_password=true), así que no se exige formato aquí.
+    // Para superadmin sí aplica el mínimo, porque /auth/register lo exige.
+    else if (tipo !== 'autoridad' && form.password.length < 8) errs.password = 'Mínimo 8 caracteres';
 
     if (tipo === 'autoridad') {
       if (!authForm.categoria_id) errs.categoria_id = 'Selecciona una categoría';
@@ -265,7 +268,7 @@ export default function NewProfile() {
                     type={showPwd ? 'text' : 'password'}
                     value={form.password}
                     onChange={e => setF('password', e.target.value)}
-                    placeholder="Mínimo 8 caracteres"
+                    placeholder={tipo === 'autoridad' ? 'Contraseña temporal' : 'Mínimo 8 caracteres'}
                     autoComplete="new-password"
                   />
                   <button type="button" style={S.eyeBtn} onClick={() => setShowPwd(v => !v)}>

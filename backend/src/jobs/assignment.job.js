@@ -158,24 +158,38 @@ async function runAssignmentJob() {
 }
 
 /**
- * Reasigna reportes que llevan más de 3 días en estado 'asignado' sin avanzar.
- * Busca una autoridad alternativa del mismo municipio y categoría con menor carga.
- * Si no hay alternativa, el reporte se mantiene asignado a la autoridad actual.
+ * Reasigna reportes que llevan más de 3 días en estado 'asignado' o 'en_proceso'
+ * sin registrar avance. Busca una autoridad alternativa del mismo municipio y
+ * categoría con menor carga. Si no hay alternativa, el reporte se mantiene
+ * asignado a la autoridad actual.
+ *
+ * El "tiempo sin avanzar" se mide desde el último registro en historial_estado
+ * del reporte, no desde reporte.updated_at: ese campo lo toca cualquier UPDATE
+ * a la fila (ej. un ciudadano confirmando el reporte como duplicado desde otra
+ * cuenta), lo que reseteaba el contador de 3 días sin que la autoridad hubiera
+ * hecho nada. historial_estado solo se inserta en transiciones/avances reales
+ * (asignación, notas de actualización, cambios de estado).
  */
 async function runReasignacionJob() {
   const atascados = await db.any(`
     SELECT
       r.id,
+      r.estado,
       r.categoria_id,
-      r.autoridad_id       AS autoridad_actual_id,
+      r.autoridad_id                AS autoridad_actual_id,
+      au.usuario_id                 AS autoridad_actual_usuario_id,
       r.colonia_poligono_id,
       r.latitud,
       r.longitud,
-      c.usuario_id         AS ciudadano_usuario_id
+      c.usuario_id                  AS ciudadano_usuario_id
     FROM reporte r
-    JOIN ciudadano c ON c.id = r.ciudadano_id
-    WHERE r.estado = 'asignado'
-      AND r.updated_at < NOW() - INTERVAL '3 days'
+    JOIN ciudadano c        ON c.id  = r.ciudadano_id
+    LEFT JOIN autoridad au  ON au.id = r.autoridad_id
+    WHERE r.estado IN ('asignado', 'en_proceso')
+      AND COALESCE(
+            (SELECT MAX(he.created_at) FROM historial_estado he WHERE he.reporte_id = r.id),
+            r.updated_at
+          ) < NOW() - INTERVAL '3 days'
   `);
 
   if (atascados.length === 0) return;
@@ -219,8 +233,8 @@ async function runReasignacionJob() {
         await t.none(
           `INSERT INTO historial_estado
              (reporte_id, estado_anterior, estado_nuevo, rol_usuario, observacion)
-           VALUES ($1, 'asignado', 'asignado', 'sistema', $2)`,
-          [r.id, 'Reasignado automáticamente por inactividad de 3 días']
+           VALUES ($1, $2, $2, 'sistema', $3)`,
+          [r.id, r.estado, 'Reasignado automáticamente por inactividad de 3 días']
         );
 
         await createNotification(
@@ -229,6 +243,15 @@ async function runReasignacionJob() {
           'Tu reporte ha sido reasignado a una nueva autoridad para agilizar su atención',
           t
         );
+
+        if (r.autoridad_actual_usuario_id) {
+          await createNotification(
+            r.autoridad_actual_usuario_id, r.id,
+            'Reporte reasignado por inactividad',
+            'Uno de tus reportes asignados fue reasignado automáticamente a otra autoridad por no registrar avance en 3 días.',
+            t
+          );
+        }
 
         await createNotification(
           nueva.usuario_id, r.id,

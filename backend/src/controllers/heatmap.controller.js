@@ -50,8 +50,10 @@ function buildDateRange(temporalidad, anio, mes, semana, vista = 'periodo') {
 
 /**
  * GET /api/heatmap
- * Devuelve reportes agrupados por colonia:
- *   { colonia, total, peso_total, lat_centroid, lng_centroid }
+ * Devuelve reportes agrupados por colonia (agrupación por cp.id, el
+ * identificador único del polígono — no por nombre, ya que hay colonias
+ * homónimas en distintos municipios o incluso repetidas dentro del mismo):
+ *   { colonia_id, colonia, total, peso_total, lat_centroid, lng_centroid }
  *
  * Filtros:
  *   temporalidad   : 'año' | 'mes' | 'semana'
@@ -120,6 +122,7 @@ async function heatmap(req, res) {
   try {
     const rows = await db.any(
       `SELECT
+         cp.id                                AS colonia_id,
          r.colonia,
          COUNT(*)::int                        AS total,
          SUM(${pesoExpr})::int                AS peso_total,
@@ -146,7 +149,7 @@ async function heatmap(req, res) {
          ))
          ${dateCondition}
          ${mineFilter}
-       GROUP BY r.colonia
+       GROUP BY cp.id, r.colonia
        ORDER BY total DESC
        LIMIT $6`,
       [
@@ -204,18 +207,21 @@ async function sectores(req, res) {
 
 /**
  * GET /api/heatmap/municipios
- * Devuelve un objeto { colonia_nombre: municipio_nombre } para todas las colonias.
+ * Devuelve un objeto { colonia_id: { nombre, municipio } } para todas las colonias.
  * Usado por el frontend para resaltar colonias de un municipio en el mapa choropleth.
+ * Indexado por colonia_id (no por nombre) porque hay colonias homónimas —
+ * varias colonias con el mismo nombre en municipios distintos, o repetidas
+ * dentro del mismo municipio como polígonos separados.
  */
 async function municipios(req, res) {
   try {
     const rows = await db.any(
-      `SELECT nombre AS colonia_nombre, municipio AS municipio_nombre
+      `SELECT id, nombre, municipio
        FROM colonia_poligono
        WHERE municipio IS NOT NULL`
     );
     const map = {};
-    rows.forEach(r => { map[r.colonia_nombre] = r.municipio_nombre; });
+    rows.forEach(r => { map[r.id] = { nombre: r.nombre, municipio: r.municipio }; });
     return res.json(map);
   } catch (err) {
     console.error('[heatmap/municipios]', err);

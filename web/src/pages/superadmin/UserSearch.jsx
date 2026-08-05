@@ -6,7 +6,7 @@ import api from '../../services/api';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-const TIPOS = ['Ciudadano', 'Autoridad'];
+const TIPOS = ['Ciudadano', 'Autoridad', 'Superadmin'];
 const PAGE_SIZE = 20;
 
 const ESTADO_BADGE = {
@@ -224,6 +224,7 @@ function TablaAutoridades({ rows, navigate, query }) {
               <th style={{ ...S.th, textAlign: 'center' }}>Reportes</th>
               <th style={{ ...S.th, textAlign: 'center' }}>Carga</th>
               <th style={S.th}>Departamento</th>
+              <th style={S.th}>Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -245,6 +246,61 @@ function TablaAutoridades({ rows, navigate, query }) {
                   {r.carga_ponderada != null ? Number(r.carga_ponderada).toFixed(1) : '—'}
                 </td>
                 <td style={S.td}>{r.departamento || <span style={{ color: 'var(--color-text-muted)' }}>—</span>}</td>
+                <td style={S.td}><span style={S.badge(r.activo === false ? 'suspendida' : 'activa')}>{r.activo === false ? 'Inactiva' : 'Activa'}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+// ── Tabla superadmins ─────────────────────────────────────────────────────────
+
+function TablaSuperadmins({ rows, navigate, query }) {
+  const [hovered, setHovered] = useState(null);
+  const { slice, page, totalPages, setPage } = usePagination(rows);
+
+  if (rows.length === 0) return <div style={S.empty}>Sin resultados</div>;
+
+  return (
+    <>
+      <div style={S.tableBar}>
+        <span style={S.barLeft}>{rows.length} resultado{rows.length !== 1 ? 's' : ''}</span>
+        {totalPages > 1 && (
+          <div style={S.pagination}>
+            <button style={S.pageBtn(page === 0)} disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+              <FiChevronLeft size={13} />
+            </button>
+            <span style={S.pageInfo}>{page + 1} / {totalPages}</span>
+            <button style={S.pageBtn(page >= totalPages - 1)} disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+              <FiChevronRight size={13} />
+            </button>
+          </div>
+        )}
+      </div>
+      <div style={S.tableScroll}>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              <th style={S.th}>Nombre completo</th>
+              <th style={S.th}>E-mail</th>
+              <th style={S.th}>Teléfono</th>
+            </tr>
+          </thead>
+          <tbody>
+            {slice.map(r => (
+              <tr
+                key={r.id}
+                style={S.tr(hovered === r.id)}
+                onMouseEnter={() => setHovered(r.id)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={() => navigate(`/superadmin/edit-profile/superadmin/${r.id}`)}
+              >
+                <td style={S.td}>{highlightText(`${r.nombre} ${r.apellido}`, query)}</td>
+                <td style={S.td}>{highlightText(r.email, query)}</td>
+                <td style={S.td}>{r.telefono || <span style={{ color: 'var(--color-text-muted)' }}>—</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -262,6 +318,7 @@ export default function UserSearch() {
   const [query,          setQuery]          = useState('');
   const [allCiudadanos,  setAllCiudadanos]  = useState([]);
   const [allAutoridades, setAllAutoridades] = useState([]);
+  const [allSuperadmins, setAllSuperadmins] = useState([]);
   const [loading,        setLoading]        = useState(false);
   const inputRef = useRef(null);
 
@@ -277,12 +334,14 @@ export default function UserSearch() {
     async function loadAll() {
       setLoading(true);
       try {
-        const [ciudRes, autRes] = await Promise.all([
+        const [ciudRes, autRes, supRes] = await Promise.all([
           api.get('/users/citizens'),
           api.get('/users/authorities'),
+          api.get('/users/superadmins'),
         ]);
         setAllCiudadanos(ciudRes.data.ciudadanos || []);
         setAllAutoridades(autRes.data.autoridades || []);
+        setAllSuperadmins(supRes.data.superadmins || []);
       } catch {
         // mantener arrays vacíos
       } finally {
@@ -313,7 +372,7 @@ export default function UserSearch() {
       if (ciudadanoFilter === 'activos')     rows = rows.filter(r => r.estado_cuenta === 'activa');
       if (ciudadanoFilter === 'suspendidos') rows = rows.filter(r => r.estado_cuenta === 'suspendida');
       return rows;
-    } else {
+    } else if (tipo === 'Autoridad') {
       let rows = allAutoridades;
       if (q) rows = rows.filter(r =>
         `${r.nombre} ${r.apellido}`.toLowerCase().includes(q) ||
@@ -324,8 +383,15 @@ export default function UserSearch() {
         rows = rows.filter(r => r[fieldMap[autoridadFilterCol]] === autoridadFilterVal);
       }
       return rows;
+    } else {
+      let rows = allSuperadmins;
+      if (q) rows = rows.filter(r =>
+        `${r.nombre} ${r.apellido}`.toLowerCase().includes(q) ||
+        r.email.toLowerCase().includes(q)
+      );
+      return rows;
     }
-  }, [tipo, debouncedQuery, allCiudadanos, allAutoridades, ciudadanoFilter, autoridadFilterCol, autoridadFilterVal]);
+  }, [tipo, debouncedQuery, allCiudadanos, allAutoridades, allSuperadmins, ciudadanoFilter, autoridadFilterCol, autoridadFilterVal]);
 
   function handleTipoChange(nuevoTipo) {
     setTipo(nuevoTipo);
@@ -365,26 +431,27 @@ export default function UserSearch() {
         </form>
 
         {/* Navbar de filtros */}
-        {tipo === 'Ciudadano'
-          ? <FilterBarCiudadanos filter={ciudadanoFilter} onChange={setCiudadanoFilter} />
-          : <FilterBarAutoridades
-              filterCol={autoridadFilterCol}
-              filterVal={autoridadFilterVal}
-              onColChange={handleAutoridadColChange}
-              onValChange={setAutoridadFilterVal}
-              options={autoridadFilterOptions}
-            />
-        }
+        {tipo === 'Ciudadano' && (
+          <FilterBarCiudadanos filter={ciudadanoFilter} onChange={setCiudadanoFilter} />
+        )}
+        {tipo === 'Autoridad' && (
+          <FilterBarAutoridades
+            filterCol={autoridadFilterCol}
+            filterVal={autoridadFilterVal}
+            onColChange={handleAutoridadColChange}
+            onValChange={setAutoridadFilterVal}
+            options={autoridadFilterOptions}
+          />
+        )}
 
         {/* Resultados */}
         {loading ? (
           <div style={S.empty}>Cargando…</div>
         ) : (
           <div style={S.tableWrap}>
-            {tipo === 'Ciudadano'
-              ? <TablaCiudadanos rows={filteredRows} navigate={navigate} query={debouncedQuery} />
-              : <TablaAutoridades rows={filteredRows} navigate={navigate} query={debouncedQuery} />
-            }
+            {tipo === 'Ciudadano' && <TablaCiudadanos rows={filteredRows} navigate={navigate} query={debouncedQuery} />}
+            {tipo === 'Autoridad' && <TablaAutoridades rows={filteredRows} navigate={navigate} query={debouncedQuery} />}
+            {tipo === 'Superadmin' && <TablaSuperadmins rows={filteredRows} navigate={navigate} query={debouncedQuery} />}
           </div>
         )}
       </div>

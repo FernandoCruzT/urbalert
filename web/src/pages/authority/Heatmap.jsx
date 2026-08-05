@@ -56,14 +56,16 @@ function coloniaColor(colonia, metrica, maxReportes) {
   return                  { fill: '#FCD34D', opacity: 0.45 };
 }
 
+/* lookup e municipioLookup están indexados por colonia_id (id único del polígono,
+   no por nombre) porque hay colonias homónimas — matchear por texto pintaba
+   todos los homónimos a la vez. municipioLookup: { colonia_id → { nombre, municipio } }. */
 function applyStyles(dataLayer, lookup, metrica, activeMunicipio, municipioLookup, maxReportes) {
   dataLayer.setStyle((feature) => {
-    const nombre      = feature.getProperty('nombre');
-    const key         = nombre?.toLowerCase().trim();
-    const data        = lookup[key];
+    const id          = feature.getId();
+    const data        = lookup[id];
     const color       = coloniaColor(data, metrica, maxReportes);
     const inMunicipio = activeMunicipio
-      ? (municipioLookup[key] === activeMunicipio)
+      ? (municipioLookup[id]?.municipio === activeMunicipio)
       : true;
 
     if (!color) {
@@ -238,7 +240,7 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
 
   useEffect(() => {
     const map = {};
-    coloniaData.forEach(c => { const key = c.colonia?.toLowerCase().trim(); if (key) map[key] = c; });
+    coloniaData.forEach(c => { if (c.colonia_id) map[c.colonia_id] = c; });
     lookup.current = map;
   }, [coloniaData]);
 
@@ -251,9 +253,9 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
       applyStyles(dataLayer, lookup.current, metrica, null, municipioLookupRef.current, maxReportesRef.current);
     });
     dataLayer.addListener('mouseover', (event) => {
+      const id     = event.feature.getId();
       const nombre = event.feature.getProperty('nombre');
-      const key    = nombre?.toLowerCase().trim();
-      const data   = lookup.current[key];
+      const data   = lookup.current[id];
       map.setOptions({ draggableCursor: 'pointer' });
       const latLng = event.latLng;
       const bounds = map.getBounds();
@@ -270,9 +272,10 @@ function ChoroplethMap({ coloniaData, metrica, municipio, showBorders, municipio
       map.setOptions({ draggableCursor: null }); setTooltip(null); dataLayer.revertStyle(event.feature);
     });
     dataLayer.addListener('click', (event) => {
+      const id        = event.feature.getId();
       const nombre    = event.feature.getProperty('nombre');
       const municipio = event.feature.getProperty('municipio');
-      if (nombre) onColoniaClickRef.current?.(nombre, municipio);
+      if (id) onColoniaClickRef.current?.(id, nombre, municipio);
     });
   }, []);
 
@@ -364,13 +367,7 @@ export default function AuthorityHeatmap() {
   /* Cargar lookup colonia → municipio para el resaltado visual */
   useEffect(() => {
     api.get('/heatmap/municipios')
-      .then(({ data }) => {
-        const normalized = {};
-        Object.entries(data).forEach(([k, v]) => {
-          normalized[k.toLowerCase().trim()] = v;
-        });
-        municipioLookupRef.current = normalized;
-      })
+      .then(({ data }) => { municipioLookupRef.current = data; })
       .catch(() => {});
   }, []);
 
@@ -424,10 +421,9 @@ export default function AuthorityHeatmap() {
   useDidUpdateEffect(() => showToast(`Métrica: ${metrica}`),                                              [metrica]);
   useDidUpdateEffect(() => showToast(subcatNombre ? `Subcategoría: ${subcatNombre}` : 'Sin filtro de subcategoría'), [subcatId]);
 
-  const handleColoniaClick = useCallback((nombre, municipio) => {
+  const handleColoniaClick = useCallback((coloniaId, nombre, municipio) => {
     setDrawer({ open: true, colonia: nombre, municipio: municipio || null, reportes: [], loading: true });
-    const params = { colonia: nombre, estado, mine: true };
-    if (municipio) params.municipio = municipio;
+    const params = { colonia_id: coloniaId, estado, mine: true };
     api.get('/reports/by-colonia', { params })
       .then(({ data }) => setDrawer(d => ({ ...d, loading: false, reportes: data.reportes || [] })))
       .catch(() => setDrawer(d => ({ ...d, loading: false, reportes: [] })));
